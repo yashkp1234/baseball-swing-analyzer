@@ -24,6 +24,10 @@ wheels/
 env/
 venv/
 
+# Test outputs
+tests_output/
+tests_output_*/
+
 # Model weights
 *.pt
 *.onnx
