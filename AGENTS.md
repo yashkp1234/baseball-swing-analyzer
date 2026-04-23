@@ -50,8 +50,7 @@ This project uses a multi-agent architecture. The orchestrator (main session) sp
 5. **Phase gates exist:** Phase 1 = `cv-engineer` + `metric-engineer`. Phase 3 = `systems-plumber` + `qa-harness`. No Phase 2 agents spawn unless Phase 1 metrics prove insufficient.
 
 ## Session Notes
-- 2026-04-22: Basic repo scaffold created (`pyproject.toml`, `src/`, `tests/`, stub `analyzer.py`).
-- Next: Implement input parsing layer and first metric extractor.
+- 2026-04-22: Phase 1 complete. Pipeline runs end-to-end on real models. 40/40 tests pass. swing-theorist review applied. Need real test videos for Phase 1 gate.
 
 ## How to Validate
 ```bash
