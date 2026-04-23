@@ -112,8 +112,8 @@ def head_displacement(keypoints_seq: np.ndarray) -> float:
 def wrist_velocity(keypoints_seq: np.ndarray, fps: float) -> np.ndarray:
     """Per-wrist velocity in px/s, shape (T, 2) for left/right wrist."""
     seq = np.asarray(keypoints_seq, dtype=float)
-    if seq.ndim != 3 or seq.shape[1:] != (17, 2):
-        raise ValueError("keypoints_seq must have shape (T, 17, 2)")
+    if seq.ndim != 3 or seq.shape[1] != 17:
+        raise ValueError("keypoints_seq must have shape (T, 17, D)")
     lw = seq[:, COCO_LW, :2]
     rw = seq[:, COCO_RW, :2]
     dt = 1.0 / float(fps)

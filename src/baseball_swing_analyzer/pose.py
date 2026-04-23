@@ -3,15 +3,15 @@
 import numpy as np
 from numpy.typing import NDArray
 
-from rtmlib import Wholebody
+from rtmlib import Body
 
-_pose_model: Wholebody | None = None
+_pose_model: Body | None = None
 
 
-def _get_pose_model() -> Wholebody:
+def _get_pose_model() -> Body:
     global _pose_model
     if _pose_model is None:
-        _pose_model = Wholebody()
+        _pose_model = Body(mode='balanced')
     return _pose_model
 
 
