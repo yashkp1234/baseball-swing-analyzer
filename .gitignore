@@ -24,7 +24,8 @@ wheels/
 env/
 venv/
 
-# Test outputs
+# Test/result outputs
+results/
 tests_output/
 tests_output_*/
 
