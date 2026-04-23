@@ -97,19 +97,28 @@ class TestSpineTilt:
 
 
 class TestKneeAngle:
-    def test_right_angle_left(self) -> None:
+    def test_flexion_90_degrees(self) -> None:
         kp = _blank_keypoints()
-        kp[11] = [0, 0]   # left hip
-        kp[13] = [1, 0]   # left knee
-        kp[15] = [1, 1]   # left ankle
+        # hip-knee-ankle interior angle = 90deg, so flexion = 180-90 = 90
+        kp[11] = [0, 0]
+        kp[13] = [1, 0]
+        kp[15] = [1, 1]
         assert knee_angle(kp, "left") == pytest.approx(90.0)
 
-    def test_right_angle_right(self) -> None:
+    def test_straight_knee(self) -> None:
         kp = _blank_keypoints()
-        kp[12] = [0, 0]   # right hip
-        kp[14] = [1, 0]   # right knee
-        kp[16] = [1, 1]   # right ankle
-        assert knee_angle(kp, "right") == pytest.approx(90.0)
+        kp[11] = [0, 0]
+        kp[13] = [1, 0]  # knee directly below hip
+        kp[15] = [2, 0]  # ankle continues straight
+        assert knee_angle(kp, "left") == pytest.approx(0.0)
+
+    def test_bent_knee_around_108(self) -> None:
+        kp = _blank_keypoints()
+        kp[11] = [0.0, 0.0]
+        kp[13] = [1.0, 2.0]
+        kp[15] = [2.0, 1.0]
+        # interior angle = ~71.6°, flexion = 180 - 71.6 = ~108.4°
+        assert knee_angle(kp, "left") == pytest.approx(108.4, abs=0.5)
 
     def test_invalid_side_raises(self) -> None:
         kp = _blank_keypoints()

@@ -38,7 +38,11 @@ def midpoint(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 
 def hip_angle(keypoints: np.ndarray) -> float:
-    """Angle of LH->RH line vs horizontal, degrees."""
+    """Angle of LH->RH line vs horizontal, degrees.
+
+    Note: Valid for **frontal/back view** only (transverse-plane rotation).
+    In a side view this measures sagittal tilt, not rotation.
+    """
     keypoints = np.asarray(keypoints, dtype=float)
     lh = keypoints[COCO_LH]
     rh = keypoints[COCO_RH]
@@ -51,7 +55,10 @@ def hip_angle(keypoints: np.ndarray) -> float:
 
 
 def shoulder_angle(keypoints: np.ndarray) -> float:
-    """Angle of LS->RS line vs horizontal, degrees."""
+    """Angle of LS->RS line vs horizontal, degrees.
+
+    Note: Valid for **frontal/back view** only (transverse-plane rotation).
+    """
     keypoints = np.asarray(keypoints, dtype=float)
     ls = keypoints[COCO_LS]
     rs = keypoints[COCO_RS]
@@ -64,12 +71,16 @@ def shoulder_angle(keypoints: np.ndarray) -> float:
 
 
 def x_factor(keypoints: np.ndarray) -> float:
-    """Hip angle minus shoulder angle."""
+    """Hip-shoulder separation in degrees.
+
+    Computed as hip_angle - shoulder_angle. This is a valid proxy
+    **only for frontal/back camera views** (transverse plane).
+    """
     return float(hip_angle(keypoints) - shoulder_angle(keypoints))
 
 
-def spine_tilt(keypoints: np.ndarray) -> float:
-    """Angle of midpoint(shoulders)->midpoint(hips) vs vertical, degrees."""
+def lateral_spine_tilt(keypoints: np.ndarray) -> float:
+    """Lateral side-bend: angle of shoulder-midpoint → hip-midpoint vs vertical."""
     keypoints = np.asarray(keypoints, dtype=float)
     shoulders = midpoint(keypoints[COCO_LS], keypoints[COCO_RS])
     hips = midpoint(keypoints[COCO_LH], keypoints[COCO_RH])
@@ -81,8 +92,12 @@ def spine_tilt(keypoints: np.ndarray) -> float:
     return float(ang)
 
 
+# Backwards-compatible alias (deprecated)
+spine_tilt = lateral_spine_tilt
+
+
 def knee_angle(keypoints: np.ndarray, side: str) -> float:
-    """Angle at knee (hip-knee-ankle) in degrees."""
+    """Knee flexion in degrees: 0 = straight, larger = more bent."""
     keypoints = np.asarray(keypoints, dtype=float)
     side = str(side).lower()
     if side == "left":
@@ -97,7 +112,7 @@ def knee_angle(keypoints: np.ndarray, side: str) -> float:
         raise ValueError("side must be 'left' or 'right'")
     v1 = hip - knee
     v2 = ankle - knee
-    return angle_between(v1, v2)
+    return 180.0 - angle_between(v1, v2)
 
 
 def head_displacement(keypoints_seq: np.ndarray) -> float:
@@ -110,7 +125,7 @@ def head_displacement(keypoints_seq: np.ndarray) -> float:
 
 
 def wrist_velocity(keypoints_seq: np.ndarray, fps: float) -> np.ndarray:
-    """Per-wrist velocity in px/s, shape (T, 2) for left/right wrist."""
+    """Per-wrist speed in px/s, shape (T, 2) for left/right wrist."""
     seq = np.asarray(keypoints_seq, dtype=float)
     if seq.ndim != 3 or seq.shape[1] != 17:
         raise ValueError("keypoints_seq must have shape (T, 17, D)")
@@ -122,24 +137,40 @@ def wrist_velocity(keypoints_seq: np.ndarray, fps: float) -> np.ndarray:
     return np.stack([vel_l, vel_r], axis=1)
 
 
-def phase_durations(phase_labels: list[str]) -> dict[str, int]:
-    """Count total frames per phase label (non-contiguous grouped)."""
-    from collections import Counter
-    return dict(Counter(phase_labels))
-
-
 def stride_foot_plant_frame(keypoints_seq: np.ndarray) -> int | None:
-    """Find frame where lower ankle's y-velocity changes from negative to positive.
+    """Find stride foot plant frame from lower-ankle y minima.
 
-    Returns the first frame index after the sign change where y-velocity is >= 0
-    after previously being < 0. None if no sign change.
+    Returns the index of the local minimum in y-position (highest on screen = lowest in image).
+    None if no clear minimum is found.
     """
     seq = np.asarray(keypoints_seq, dtype=float)
     ankles = seq[:, [COCO_LA, COCO_RA], 1]
     lower_ankle_idx = np.argmin(ankles, axis=1)
     lower_y = np.array([ankles[t, lower_ankle_idx[t]] for t in range(len(ankles))])
-    vy = np.diff(lower_y, prepend=lower_y[0])
-    for i in range(1, len(vy)):
-        if vy[i - 1] < 0 and vy[i] >= 0:
-            return int(i - 1)
+
+    if len(lower_y) < 3:
+        return None
+
+    # Smooth longer sequences; use raw for short clips
+    if len(lower_y) >= 15:
+        window = max(3, len(lower_y) // 10)
+        half = window // 2
+        smoothed = np.array([
+            lower_y[max(0, i - half):min(len(lower_y), i + half + 1)].mean()
+            for i in range(len(lower_y))
+        ])
+    else:
+        smoothed = lower_y
+
+    # find local minima; pick the first significant one (not at edges)
+    for i in range(1, len(smoothed) - 1):
+        if smoothed[i] <= smoothed[i - 1] and smoothed[i] < smoothed[i + 1]:
+            if i > len(smoothed) * 0.1:
+                return int(i)
     return None
+
+
+def phase_durations(phase_labels: list[str]) -> dict[str, int]:
+    """Count total frames per phase label (non-contiguous grouped)."""
+    from collections import Counter
+    return dict(Counter(phase_labels))
