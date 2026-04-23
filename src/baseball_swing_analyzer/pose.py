@@ -15,6 +15,33 @@ def _get_pose_model() -> Body:
     return _pose_model
 
 
+def _select_dominant(keypoints: np.ndarray, scores: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
+    """Select single person with highest average score.
+
+    Handles multi-person output from rtmlib Body:
+      - keypoints (N, K, 2) and scores (N, K) when N > 1
+      - keypoints (K, 2) and scores (K,) when N == 1
+      - empty arrays when N == 0
+    """
+    # Empty (no detections)
+    if keypoints.size == 0 or scores.size == 0:
+        empty_kp = np.zeros((17, 2), dtype=np.float32)
+        empty_s = np.zeros(17, dtype=np.float32)
+        return empty_kp, empty_s
+
+    if keypoints.ndim == 2 and scores.ndim == 1:
+        return keypoints.astype(np.float32), scores.astype(np.float32)
+
+    if keypoints.ndim == 3 and scores.ndim == 2:
+        mean_scores = scores.mean(axis=1)
+        dominant = int(np.argmax(mean_scores))
+        return keypoints[dominant].astype(np.float32), scores[dominant].astype(np.float32)
+
+    raise ValueError(
+        f"Unexpected keypoints/scores shape: {keypoints.shape} / {scores.shape}"
+    )
+
+
 def extract_pose(
     frame: NDArray[np.uint8],
     bbox: tuple[int, int, int, int] | None = None,
@@ -34,12 +61,13 @@ def extract_pose(
         y2 = min(h, y2)
         crop = frame[y1:y2, x1:x2]
         keypoints, scores = model(crop)
+        keypoints, scores = _select_dominant(keypoints, scores)
         keypoints = keypoints.copy()
-        scores = scores.copy()
         keypoints[:, 0] += x1
         keypoints[:, 1] += y1
     else:
         keypoints, scores = model(frame)
+        keypoints, scores = _select_dominant(keypoints, scores)
 
     out = np.zeros((17, 3), dtype=np.float32)
     out[:, :2] = keypoints.astype(np.float32)

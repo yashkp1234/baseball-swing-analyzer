@@ -75,6 +75,30 @@ class TestXFactor:
         kp[6] = [1, 0]
         assert x_factor(kp) == pytest.approx(45.0)
 
+    def test_wraparound_170_minus_minus_10(self) -> None:
+        kp = _blank_keypoints()
+        # vertical hip line (x constant) → hip_angle = 90.0
+        kp[11] = [-1, 10]
+        kp[12] = [-1, -10]
+        # vertical shoulder line (x constant) → shoulder_angle = 90.0
+        kp[5] = [1, 10]
+        kp[6] = [1, -10]
+        assert hip_angle(kp) == pytest.approx(90.0)
+        assert shoulder_angle(kp) == pytest.approx(90.0)
+        # separation = 180 - 180 = 0
+        assert abs(x_factor(kp)) == pytest.approx(0.0, abs=0.1)
+
+    def test_wraparound_boundary_opposite(self) -> None:
+        kp = _blank_keypoints()
+        # hip angle near +170°, shoulder near -170° (20° total separation)
+        kp[11] = [10, 0]
+        kp[12] = [-1, 1]
+        kp[5] = [1, 0]
+        kp[6] = [10, 1]
+        # hip ≈ 174°, shoulder ≈ -174° → separation ≈ -348° → normalized to ≈ +12°
+        sep = x_factor(kp)
+        assert abs(sep) <= 180.0
+
 
 class TestSpineTilt:
     def test_perfectly_vertical(self) -> None:

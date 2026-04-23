@@ -1,0 +1,19 @@
+{
+  "phase_durations": {
+    "stance": 6,
+    "load": 9,
+    "follow_through": 51
+  },
+  "stride_plant_frame": 15,
+  "contact_frame": 33,
+  "hip_angle_at_contact": 23.094525530745923,
+  "shoulder_angle_at_contact": -3.969557047886836,
+  "x_factor_at_contact": 27.064082578632757,
+  "spine_tilt_at_contact": 8.638281133767816,
+  "left_knee_at_contact": 1.5234760509901548,
+  "right_knee_at_contact": 48.10372977329504,
+  "head_displacement_total": 136.93186018772718,
+  "wrist_peak_velocity_px_s": 2463.4062056871844,
+  "frames": 66,
+  "fps": 30.0
+}

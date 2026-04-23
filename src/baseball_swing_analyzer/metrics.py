@@ -70,13 +70,23 @@ def shoulder_angle(keypoints: np.ndarray) -> float:
     return float(ang)
 
 
+def _normalize_angle_diff(a: float, b: float) -> float:
+    """Return the smallest signed difference between two angles in degrees."""
+    diff = a - b
+    while diff > 180:
+        diff -= 360
+    while diff < -180:
+        diff += 360
+    return float(diff)
+
+
 def x_factor(keypoints: np.ndarray) -> float:
     """Hip-shoulder separation in degrees.
 
     Computed as hip_angle - shoulder_angle. This is a valid proxy
     **only for frontal/back camera views** (transverse plane).
     """
-    return float(hip_angle(keypoints) - shoulder_angle(keypoints))
+    return _normalize_angle_diff(hip_angle(keypoints), shoulder_angle(keypoints))
 
 
 def lateral_spine_tilt(keypoints: np.ndarray) -> float:
