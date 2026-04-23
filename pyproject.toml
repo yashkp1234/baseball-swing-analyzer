@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "baseball-swing-analyzer"
+version = "0.1.0"
+description = "Analyze baseball swings and extract key metrics."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/baseball_swing_analyzer"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
