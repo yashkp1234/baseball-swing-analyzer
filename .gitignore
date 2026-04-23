@@ -24,6 +24,9 @@ wheels/
 env/
 venv/
 
+# Model weights
+*.pt
+*.onnx
 
 # Claude memory
 .claude/
