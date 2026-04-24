@@ -33,5 +33,9 @@ tests_output_*/
 *.pt
 *.onnx
 
+# Video files (add manually via git lfs or keep local only)
+data/videos/
+*.m4a
+
 # Claude memory
 .claude/

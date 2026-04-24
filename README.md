@@ -5,8 +5,8 @@ Analyze baseball swings from phone video and extract key biomechanical metrics w
 ## Features
 
 - **Video ingestion**: Load any mp4/MOV, detect blur, report FPS
-- **Person detection**: YOLOv8 auto-detects hitter in frame
-- **Pose estimation**: RTMPose-m (COCO-17 keypoints, ~500MB VRAM)
+- **Person detection**: YOLOv8l auto-detects hitter in frame
+- **Pose estimation**: RTMO-m via rtmlib (COCO-17 keypoints, ~500MB VRAM)
 - **Keypoint smoothing**: Temporal moving average across frames
 - **Phase detection**: Rule-based (stance → load → stride → swing → contact → follow-through)
 - **Biomechanical metrics**: hip/shoulder angles, x-factor, knee flexion, spine tilt, stride timing, wrist velocity (bat speed proxy), head displacement
@@ -17,7 +17,7 @@ Analyze baseball swings from phone video and extract key biomechanical metrics w
 
 ```bash
 pip install -e ".[test]"
-python -m baseball_swing_analyzer --video swing.mp4 --output results/ --annotate --coach
+python -m baseball_swing_analyzer --video swing.mp4 --output results/ --annotate --coach --hand auto
 ```
 
 Outputs:

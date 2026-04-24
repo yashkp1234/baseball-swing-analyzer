@@ -14,7 +14,10 @@ PHASE_LABELS = [
 ]
 
 
-def classify_phases(keypoints_seq: NDArray[np.floating]) -> list[str]:
+def classify_phases(
+    keypoints_seq: NDArray[np.floating],
+    fps: float = 60.0,
+) -> list[str]:
     """Assign a phase label to every frame using heuristic rules.
 
     Rules (order matters):
@@ -29,6 +32,8 @@ def classify_phases(keypoints_seq: NDArray[np.floating]) -> list[str]:
     ----------
     keypoints_seq :
         Shape ``(T, 17, 2|3)`` COCO keypoint array.
+    fps :
+        Frame rate of the source video. Used for velocity scaling.
 
     Returns
     -------
@@ -48,7 +53,6 @@ def classify_phases(keypoints_seq: NDArray[np.floating]) -> list[str]:
         wrist_velocity,
     )
 
-    fps = 60.0  # default; caller can rescale if needed
     vel = wrist_velocity(seq, fps)  # (T, 2)
     max_vel = vel.max(axis=1)
     contact = int(np.argmax(max_vel))
@@ -65,6 +69,9 @@ def classify_phases(keypoints_seq: NDArray[np.floating]) -> list[str]:
     # Frame where cumulative backward hand displacement is greatest = end of load
     cumdisp = np.cumsum(hand_disp)
     load_end = int(np.searchsorted(cumdisp, cumdisp[-1] * 0.3)) if T > 10 else max(1, plant // 3)
+
+    # Clamp load_end so it never reaches or passes the contact frame
+    load_end = min(load_end, contact - 2)
 
     labels: list[str] = []
     for t in range(T):

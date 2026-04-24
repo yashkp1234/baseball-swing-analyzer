@@ -18,6 +18,7 @@ def analyze_swing(
     video_path: Path,
     output_dir: Path | None = None,
     annotate: bool = False,
+    handedness: str = "auto",
 ) -> dict:
     """Run the full Phase 1 pipeline on a video file.
 
@@ -51,9 +52,9 @@ def analyze_swing(
     keypoints_seq = np.stack(keypoints_list, axis=0)  # (T, 17, 3)
     keypoints_seq = smooth_keypoints(keypoints_seq)
 
-    phase_labels = classify_phases(keypoints_seq)
+    phase_labels = classify_phases(keypoints_seq, fps=props.fps)
     report = build_report(phase_labels, keypoints_seq, props.fps)
-    report["flags"] = generate_qualitative_flags(keypoints_seq, phase_labels)
+    report["flags"] = generate_qualitative_flags(keypoints_seq, phase_labels, handedness=handedness)
 
     if annotate and output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)

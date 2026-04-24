@@ -5,6 +5,7 @@ import pytest
 
 from baseball_swing_analyzer.ai.flags import (
     arm_slot_at_contact,
+    detect_handedness,
     front_shoulder_closed_in_load,
     generate_qualitative_flags,
     high_or_low_finish,
@@ -19,19 +20,49 @@ def _blank_seq(frames: int = 10) -> np.ndarray:
 
 def test_front_shoulder_closed_yes() -> None:
     seq = _blank_seq(20)
-    # load phase: front shoulder (5) is more camera-side (left, lower x) than back (6)
     seq[:, 5, 0] = 100
     seq[:, 6, 0] = 120
     labels = ["stance"] * 5 + ["load"] * 10 + ["stride"] * 5
-    assert front_shoulder_closed_in_load(seq, labels) is True
+    assert front_shoulder_closed_in_load(seq, labels, handedness="right") is True
 
 
 def test_front_shoulder_closed_no() -> None:
     seq = _blank_seq(20)
-    seq[:, 5, 0] = 120  # front shoulder already opened
+    seq[:, 5, 0] = 120
     seq[:, 6, 0] = 100
     labels = ["stance"] * 5 + ["load"] * 10 + ["stride"] * 5
-    assert front_shoulder_closed_in_load(seq, labels) is False
+    assert front_shoulder_closed_in_load(seq, labels, handedness="right") is False
+
+
+def test_front_shoulder_closed_auto_detects_righty() -> None:
+    seq = _blank_seq(20)
+    # Stance+load with clear RHH signature: left shoulder well left of right (camera-left = front for RHH)
+    seq[:, 5, 0] = 80   # LS far left
+    seq[:, 6, 0] = 120  # RS right
+    labels = ["stance"] * 5 + ["load"] * 10 + ["stride"] * 5
+    # Auto-detect should interpret as RHH because LS < RS
+    assert detect_handedness(seq, labels) == "right"
+    # Then front-shoulder check should also pass
+    assert front_shoulder_closed_in_load(seq, labels) is True
+
+
+def test_front_shoulder_closed_auto_detects_lefty() -> None:
+    seq = _blank_seq(20)
+    # LHH signature: right shoulder far left of left shoulder
+    seq[:, 5, 0] = 120  # LS right
+    seq[:, 6, 0] = 80   # RS far left (front for LHH)
+    labels = ["stance"] * 5 + ["load"] * 10 + ["stride"] * 5
+    assert detect_handedness(seq, labels) == "left"
+    # For LHH front shoulder is RS (idx 6). RS_x=80 < LS_x=120 → closed
+    assert front_shoulder_closed_in_load(seq, labels) is True
+
+
+def test_front_shoulder_closed_open_for_lefty() -> None:
+    seq = _blank_seq(20)
+    # LHH open: front shoulder (RS, idx 6) has higher x than back (LS, idx 5)
+    seq[:, 5, 0] = 100
+    seq[:, 6, 0] = 120
+    assert front_shoulder_closed_in_load(seq, labels=["load"] * 20, handedness="left") is False
 
 
 def test_leg_kick_detected() -> None:

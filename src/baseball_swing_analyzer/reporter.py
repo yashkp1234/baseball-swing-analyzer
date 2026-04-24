@@ -50,8 +50,6 @@ def build_report(
     T = keypoints_seq.shape[0]
     durations = phase_durations(phase_labels)
 
-    # Per-phase representative angles
-    stance_mask = [p == "stance" for p in phase_labels]
     contact_idx = phase_labels.index("contact") if "contact" in phase_labels else T // 2
 
     kp_contact = keypoints_seq[contact_idx]
