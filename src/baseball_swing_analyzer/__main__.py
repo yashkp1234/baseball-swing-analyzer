@@ -42,7 +42,7 @@ def _run_single(args: argparse.Namespace) -> int:
     print(summarize_metrics(result))
 
     if args.coach:
-        _write_coaching_report(result, args)
+        _write_coaching_report(result, args, output_dir=args.output)
     return 0
 
 
@@ -62,7 +62,7 @@ def _run_batch(args: argparse.Namespace) -> int:
         write_metrics_json(result, out / "metrics.json")
         reports.append(result)
         if args.coach:
-            _write_coaching_report(result, args)
+            _write_coaching_report(result, args, output_dir=out)
         print(f"Analyzed {vid.name}")
 
     session = build_session_report(reports)
@@ -73,11 +73,11 @@ def _run_batch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _write_coaching_report(result: dict, args: argparse.Namespace) -> None:
+def _write_coaching_report(result: dict, args: argparse.Namespace, *, output_dir: Path) -> None:
     from baseball_swing_analyzer.ai.knowledge import generate_static_report
 
     static_cues = generate_static_report(result)
-    report_path = args.output / "coaching.md"
+    report_path = output_dir / "coaching.md"
     report_lines = ["## Coaching Report", "", "### Biomechanical Cues", ""]
     for cue in static_cues:
         report_lines.append(f"- {cue}")
@@ -101,12 +101,13 @@ def _write_coaching_report(result: dict, args: argparse.Namespace) -> None:
         report_lines.extend(["", "### AI-Generated Insights", ""])
         for b in bullets:
             report_lines.append(f"- {b}")
+        report_path.write_text("\n".join(report_lines), encoding="utf-8")
     except Exception:
         report_lines.extend(
             ["", "*Note: Cloud AI unavailable — showing offline coaching cues only.*"]
         )
+        report_path.write_text("\n".join(report_lines), encoding="utf-8")
 
-    report_path.write_text("\n".join(report_lines), encoding="utf-8")
     print(f"\nCoaching report written to {report_path}")
     print("\n".join(f"- {c}" for c in static_cues))
 

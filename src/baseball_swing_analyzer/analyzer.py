@@ -12,6 +12,7 @@ from .phases import classify_phases
 from .pose import extract_pose, smooth_keypoints
 from .reporter import build_report
 from .ai.flags import generate_qualitative_flags
+from .visualizer import annotate_frame
 
 
 def analyze_swing(
