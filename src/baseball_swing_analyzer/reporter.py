@@ -19,7 +19,9 @@ def summarize_metrics(metrics: dict) -> str:
     """Return a human-readable summary table string."""
     lines: list[str] = ["=" * 40, "SWING METRICS", "=" * 40]
     for name, value in metrics.items():
-        if isinstance(value, float):
+        if name == "flags" and isinstance(value, dict):
+            lines.append(f"  {name:30s} {str(value):10s}")
+        elif isinstance(value, float):
             lines.append(f"  {name:30s} {value:10.2f}")
         else:
             lines.append(f"  {name:30s} {str(value):10s}")

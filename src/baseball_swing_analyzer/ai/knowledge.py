@@ -3,7 +3,7 @@
 Maps metric ranges to coaching cues. Used as fallback when cloud API is unavailable.
 """
 
-from typing import Callable
+from typing import Any, Callable
 
 MetricRule = Callable[[float], str | None]
 
@@ -62,15 +62,53 @@ RULES: list[tuple[str, MetricRule]] = [
 ]
 
 
+FLAG_CUES: dict[str, list[tuple[Callable[[Any], bool], str]]] = {
+    "front_shoulder_closed_load": [
+        (lambda v: not v, "Front shoulder is opening early during the load — keep the front side closed longer to create more stretch."),
+    ],
+    "hip_casting": [
+        (lambda v: v is True, "Hips are casting early — make sure your hands stay back and your hips don't rotate before the stride foot plants."),
+    ],
+    "arm_slot_at_contact": [
+        (lambda v: v == "high", "High arm slot at contact — check you're not pushing with your shoulder rather than rotating through the ball."),
+        (lambda v: v == "low", "Low arm slot at contact — you may be dropping your back shoulder. Keep your spine angle consistent."),
+    ],
+}
+
+
 def generate_static_report(metrics: dict) -> list[str]:
-    """Build a coaching report from the static rule set."""
+    """Build a coaching report from the static rule set + qualitative flags."""
     cues: list[str] = []
+
+    # Metric-based rules
     for name, rule in RULES:
         value = metrics.get(name)
         if isinstance(value, (int, float)):
             cue = rule(value)
             if cue:
                 cues.append(cue)
+
+    # Flag-based rules
+    flags = metrics.get("flags")
+    if isinstance(flags, dict):
+        for name, conditions in FLAG_CUES.items():
+            val = flags.get(name)
+            for check, cue in conditions:
+                if check(val):
+                    cues.append(cue)
+        
+        # Leg action tip
+        leg = flags.get("leg_action")
+        if leg == "leg_kick":
+            cues.append("You're using a leg kick — good for timing, but make sure it doesn't cause your head to drift forward.")
+        elif leg == "neither":
+            cues.append("Minimal leg lift detected — a small lift or toe-tap can help improve rhythm and load.")
+
+        # Finish height tip
+        finish = flags.get("finish_height")
+        if finish == "low":
+            cues.append("Low finish detected — stay through the ball longer and extend your arms toward the pitcher.")
+
     if not cues:
         cues.append("Swing mechanics look solid. Keep working on consistency and timing.")
     return cues

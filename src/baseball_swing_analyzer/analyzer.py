@@ -11,7 +11,7 @@ from .ingestion import get_video_properties, load_video
 from .phases import classify_phases
 from .pose import extract_pose, smooth_keypoints
 from .reporter import build_report
-from .visualizer import annotate_frame
+from .ai.flags import generate_qualitative_flags
 
 
 def analyze_swing(
@@ -53,6 +53,7 @@ def analyze_swing(
 
     phase_labels = classify_phases(keypoints_seq)
     report = build_report(phase_labels, keypoints_seq, props.fps)
+    report["flags"] = generate_qualitative_flags(keypoints_seq, phase_labels)
 
     if annotate and output_dir is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
