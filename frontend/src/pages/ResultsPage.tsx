@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { getJobResults, artifactUrl, type SwingResults, type SwingMetrics } from "@/lib/api";
+import { type AnalysisResponse, type SwingMetrics, artifactUrl } from "@/lib/api";
 import { Card, CardTitle } from "@/components/Card";
 import { MetricCard } from "@/components/MetricCard";
 import { PhaseTimeline } from "@/components/PhaseTimeline";
@@ -22,52 +22,35 @@ const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
-  const [results, setResults] = useState<SwingResults | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [data, setData] = useState<AnalysisResponse | null>(null);
 
   useEffect(() => {
     if (!jobId) return;
-    getJobResults(jobId)
-      .then(setResults)
-      .catch((e) => setError(e.message));
+    const cached = sessionStorage.getItem(`result_${jobId}`);
+    if (cached) {
+      setData(JSON.parse(cached));
+    }
   }, [jobId]);
 
-  if (error) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="rounded-lg border border-[var(--color-red)] bg-[var(--color-red)]/10 p-6 text-[var(--color-red)]">
-          Error: {error}
-        </div>
-      </div>
-    );
-  }
-
-  if (!results) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-pulse text-[var(--color-text-dim)]">Loading results...</div>
-      </div>
-    );
-  }
-
-  if (results.status === "failed") {
+  if (!data || data.status === "failed") {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card className="max-w-md">
-          <p className="text-[var(--color-red)] font-medium">Analysis failed</p>
-          <p className="text-[var(--color-text-dim)] text-sm mt-2">Please try uploading again.</p>
+          <p className="text-[var(--color-red)] font-medium">
+            {data?.error || "No results found for this analysis."}
+          </p>
           <Link to="/" className="mt-4 inline-block text-[var(--color-accent)] text-sm hover:underline">
-            ← Upload new video
+            Upload a new video
           </Link>
         </Card>
       </div>
     );
   }
 
-  const m = results.metrics;
-  if (!m) return null;
+  const m = data.metrics;
+  if (!m) return <div className="min-h-screen flex items-center justify-center text-[var(--color-text-dim)]">No metrics data.</div>;
 
-  const videoSrc = jobId ? artifactUrl(jobId, "annotated.mp4") : "";
+  const videoSrc = artifactUrl(jobId!, "annotated.mp4");
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)]">
@@ -83,55 +66,40 @@ export function ResultsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Phase Timeline */}
         <Card>
           <CardTitle>Phase Timeline</CardTitle>
           <PhaseTimeline phaseLabels={m.phase_labels} />
           <div className="mt-2 flex gap-4 text-xs text-[var(--color-text-dim)]">
             <span>Stride plant: frame {m.stride_plant_frame ?? "—"}</span>
             <span>Contact: frame {m.contact_frame}</span>
-            <span>Total frames: {m.frames} @ {m.fps.toFixed(1)} fps</span>
+            <span>Total: {m.frames} frames @ {m.fps.toFixed(1)} fps</span>
           </div>
         </Card>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Left: Video */}
           <div className="lg:col-span-2 space-y-6">
-            {videoSrc && (
-              <Card>
-                <CardTitle>Annotated Video</CardTitle>
-                <VideoPlayer src={videoSrc} />
-              </Card>
-            )}
+            <Card>
+              <CardTitle>Annotated Video</CardTitle>
+              <VideoPlayer src={videoSrc} />
+            </Card>
 
-            {/* Flags */}
             <Card>
               <CardTitle>Qualitative Flags</CardTitle>
               <FlagsPanel flags={m.flags} />
             </Card>
 
-            {/* Coaching */}
-            <CoachingReport html={results.coaching_html} />
+            <CoachingReport html={data.coaching_html} />
           </div>
 
-          {/* Right: Metrics */}
           <div className="space-y-3">
             <CardTitle className="px-1">Key Metrics</CardTitle>
             <div className="grid grid-cols-1 gap-3">
               {DISPLAY_METRICS.map(({ key, label }) => {
                 const val = m[key];
-                return (
-                  <MetricCard
-                    key={key}
-                    label={label}
-                    value={typeof val === "number" ? val : String(val)}
-                    metricKey={key}
-                  />
-                );
+                return <MetricCard key={key} label={label} value={typeof val === "number" ? val : String(val)} metricKey={key} />;
               })}
             </div>
 
-            {/* Phase Durations */}
             <Card className="mt-4">
               <CardTitle>Phase Durations</CardTitle>
               <div className="space-y-1">
@@ -144,9 +112,9 @@ export function ResultsPage() {
               </div>
             </Card>
 
-            {/* 3D Viewer Link */}
             <Link
               to={`/viewer/${jobId}`}
+              state={{ data }}
               className="mt-4 flex items-center justify-center gap-2 rounded-xl border-2 border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-6 py-4 text-[var(--color-accent)] font-semibold hover:bg-[var(--color-accent)]/20 transition-all"
             >
               <Box className="h-5 w-5" />

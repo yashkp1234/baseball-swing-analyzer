@@ -1,12 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { UploadZone } from "@/components/UploadZone";
-import { ProcessingStatus } from "@/components/ProcessingStatus";
-import { uploadVideo } from "@/lib/api";
+import { uploadAndAnalyze, type AnalysisResponse } from "@/lib/api";
 
 export function UploadPage() {
   const navigate = useNavigate();
-  const [jobId, setJobId] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -14,22 +12,18 @@ export function UploadPage() {
     setError(null);
     setIsUploading(true);
     try {
-      const result = await uploadVideo(file);
-      setJobId(result.job_id);
+      const result = await uploadAndAnalyze(file);
+      if (result.status === "failed") {
+        setError(result.error || "Analysis failed");
+        setIsUploading(false);
+        return;
+      }
+      sessionStorage.setItem(`result_${result.job_id}`, JSON.stringify(result));
+      navigate(`/results/${result.job_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
       setIsUploading(false);
     }
-  };
-
-  const handleComplete = (id: string) => {
-    navigate(`/results/${id}`);
-  };
-
-  const handleError = (_id: string, errMsg: string) => {
-    setError(errMsg);
-    setJobId(null);
-    setIsUploading(false);
   };
 
   return (
@@ -44,14 +38,15 @@ export function UploadPage() {
           </p>
         </div>
 
-        {jobId ? (
-          <ProcessingStatus
-            jobId={jobId}
-            onComplete={handleComplete}
-            onError={handleError}
-          />
-        ) : (
-          <UploadZone onFileSelected={handleFile} isUploading={isUploading} />
+        <UploadZone onFileSelected={handleFile} isUploading={isUploading} />
+
+        {isUploading && (
+          <div className="mt-6 flex flex-col items-center gap-2">
+            <div className="h-2 w-full max-w-md rounded-full bg-[var(--color-surface-2)] overflow-hidden">
+              <div className="h-full rounded-full bg-[var(--color-accent)] animate-pulse" style={{ width: "60%" }} />
+            </div>
+            <p className="text-sm text-[var(--color-text-dim)]">Analyzing swing — this takes 10-30 seconds...</p>
+          </div>
         )}
 
         {error && (

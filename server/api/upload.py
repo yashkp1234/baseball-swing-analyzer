@@ -1,19 +1,21 @@
-"""Upload endpoint — accept video, create job, start analysis."""
+"""Upload endpoint — accept video, create job, start analysis in a thread."""
 
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-from fastapi import APIRouter, UploadFile, File, BackgroundTasks
+from fastapi import APIRouter, UploadFile, File
 
 from .. import db
 from ..tasks.analyze import UPLOAD_DIR, OUTPUT_DIR, run_analysis
+
+_executor = ThreadPoolExecutor(max_workers=2)
 
 router = APIRouter()
 
 
 @router.post("/")
 async def create_job(
-    background_tasks: BackgroundTasks,
     video: UploadFile = File(...),
 ):
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -36,5 +38,5 @@ async def create_job(
 
     db.update_job(job_id, video_path=str(saved_path), output_dir=str(out_dir))
 
-    background_tasks.add_task(run_analysis, job_id)
+    _executor.submit(run_analysis, job_id)
     return {"job_id": job_id, "status": "queued"}
