@@ -1,12 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Box } from "lucide-react";
-import { AnalysisSummary } from "@/components/AnalysisSummary";
 import { Card, CardTitle } from "@/components/Card";
+import { DetailsDiagnostics } from "@/components/DetailsDiagnostics";
 import { ExecutiveSummaryHero } from "@/components/ExecutiveSummaryHero";
 import { ImprovementPlan } from "@/components/ImprovementPlan";
-import { MetricCard } from "@/components/MetricCard";
-import { PhaseTimeline } from "@/components/PhaseTimeline";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
 import { SwingTakeaways } from "@/components/SwingTakeaways";
 import { VideoPlayer } from "@/components/VideoPlayer";
@@ -108,7 +106,6 @@ export function ResultsPage() {
                   <Box className="h-5 w-5" />
                   Launch 3D Swing Viewer
                 </Link>
-                <AnalysisSummary analysis={resultsQuery.data?.analysis} />
               </div>
             </div>
           </div>
@@ -122,42 +119,11 @@ export function ResultsPage() {
           flags={metrics.flags}
         />
 
-        <Card className="rounded-[24px]">
-          <CardTitle>Phase Timeline</CardTitle>
-          <PhaseTimeline phaseLabels={metrics.phase_labels} />
-          <div className="mt-2 flex flex-wrap gap-4 text-xs text-[var(--color-text-dim)]">
-            <span>Stride plant: frame {metrics.stride_plant_frame ?? "-"}</span>
-            <span>Contact: frame {metrics.contact_frame}</span>
-            <span>Total: {metrics.frames} frames @ {metrics.fps.toFixed(1)} fps</span>
-            <span>Pose confidence: {(metrics.pose_confidence_mean * 100).toFixed(0)}%</span>
-          </div>
-        </Card>
-
-        <Card className="rounded-[24px] bg-[var(--color-surface)]/78 p-5">
-          <div className="mb-4 flex flex-col gap-2 px-1 md:flex-row md:items-end md:justify-between">
-            <div>
-              <CardTitle className="mb-1 px-0">Supporting metrics</CardTitle>
-              <p className="max-w-3xl text-sm leading-6 text-[var(--color-text-dim)]">
-                Keep these numbers as a reference layer behind the story above, then use the annotated swing to confirm
-                what matters most.
-              </p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
-            {DISPLAY_METRICS.map(({ key, label }) => {
-              const value = metrics[key];
-              return (
-                <MetricCard
-                  key={key as string}
-                  label={label}
-                  value={typeof value === "number" ? value : String(value)}
-                  metricKey={key as string}
-                  className="bg-[var(--color-surface-2)]/50 p-4"
-                />
-              );
-            })}
-          </div>
-        </Card>
+        <DetailsDiagnostics
+          analysis={resultsQuery.data?.analysis}
+          metrics={metrics}
+          metricDefinitions={DISPLAY_METRICS}
+        />
       </main>
     </div>
   );

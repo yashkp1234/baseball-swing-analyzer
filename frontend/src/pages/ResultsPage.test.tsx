@@ -87,7 +87,7 @@ describe("ResultsPage", () => {
     expect(html).toContain("Annotated Video");
   });
 
-  test("folds coaching and flags into the narrative flow and demotes the raw metrics section", () => {
+  test("keeps the story sections primary and moves diagnostics into a secondary details band", () => {
     mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({ data: results } as never);
 
     const html = renderToStaticMarkup(
@@ -104,13 +104,25 @@ describe("ResultsPage", () => {
     expect(html).toContain("Stay closed longer into launch.");
     expect(html).not.toContain("Qualitative Flags");
     expect(html).not.toContain("Coaching Report");
+    expect(html).toContain("Details and diagnostics");
+    expect(html).toContain("Analysis details");
+    expect(html).toContain("Phase Timeline");
     expect(html).toContain("Supporting metrics");
 
     const storyStart = html.indexOf("What&#x27;s working");
+    const nextActionsStart = html.indexOf("What to improve next");
+    const detailsStart = html.indexOf("Details and diagnostics");
+    const timelineStart = html.indexOf("Phase Timeline");
     const metricsStart = html.indexOf("Supporting metrics");
 
     expect(storyStart).toBeGreaterThan(-1);
+    expect(nextActionsStart).toBeGreaterThan(-1);
+    expect(detailsStart).toBeGreaterThan(-1);
+    expect(timelineStart).toBeGreaterThan(-1);
     expect(metricsStart).toBeGreaterThan(-1);
-    expect(storyStart).toBeLessThan(metricsStart);
+    expect(storyStart).toBeLessThan(nextActionsStart);
+    expect(nextActionsStart).toBeLessThan(detailsStart);
+    expect(detailsStart).toBeLessThan(timelineStart);
+    expect(timelineStart).toBeLessThan(metricsStart);
   });
 });
