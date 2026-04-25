@@ -60,3 +60,45 @@ pip install -e ".[test]"
 # Run tests
 pytest
 ```
+
+---
+
+## Installed Skills (`.agents/skills/`)
+
+Skills installed via `npx skills add`. Compatible with Claude Code, Cursor, Cline, Amp, Codex, and any agent that reads `.agents/skills/`.
+
+### Frontend / UI skills
+
+| Skill | Trigger | Use when |
+|---|---|---|
+| `frontend-design` | "redesign", "make this look better", "redo the X page", "UI looks bad" | Building or redesigning any component, page, or layout. Produces intentional, production-grade design. |
+| `web-design-guidelines` | "audit the design", "check accessibility", "review UX" | Auditing existing UI against Vercel Web Interface Guidelines — accessibility, contrast, UX quality. Run after any frontend redesign. |
+| `vercel-react-best-practices` | "optimize this component", "review data fetching", "why is this slow" | Reviewing or writing React code for performance — re-renders, memoization, bundle size. Apply when touching `api.ts` or any polling component. |
+| `webapp-testing` | "test this in the browser", "check if X works", "debug why video isn't playing" | Testing UI behavior in a real browser with Playwright — screenshots, logs, end-to-end flows. |
+
+### Development workflow skills (from `obra/superpowers`)
+
+| Skill | Use when |
+|---|---|
+| `writing-plans` | Before any non-trivial implementation — produce a structured plan first |
+| `executing-plans` | You have a plan; agent executes it step-by-step |
+| `systematic-debugging` | Hard bug that needs methodical hypothesis → reproduce → isolate → fix |
+| `test-driven-development` | Write tests first, then implementation |
+| `subagent-driven-development` | Large feature that can be split into parallel workstreams |
+| `dispatching-parallel-agents` | Explicitly running multiple agents at once |
+| `finishing-a-development-branch` | Wrapping up — tests, cleanup, commit, PR description |
+| `requesting-code-review` | Self-audit + PR prep before asking for review |
+| `receiving-code-review` | Understanding and applying reviewer feedback |
+| `using-git-worktrees` | Running parallel experiments without branch-switching |
+| `verification-before-completion` | Pre-done checklist — did tests pass, screenshot taken, committed? |
+| `brainstorming` | Exploring design directions, feature ideas, architecture options |
+| `using-superpowers` | Meta-skill: forces agent to always check skill list before responding |
+
+### Recommended workflow for frontend changes
+
+1. `writing-plans` → align on approach before touching code
+2. `frontend-design` → build / redesign the component
+3. `web-design-guidelines` → audit for accessibility + UX quality
+4. `vercel-react-best-practices` → catch React perf issues
+5. `webapp-testing` → verify in a real browser (upload → analyze → results)
+6. `finishing-a-development-branch` → commit + wrap up
