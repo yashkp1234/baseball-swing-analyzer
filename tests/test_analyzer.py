@@ -6,7 +6,12 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from baseball_swing_analyzer.analyzer import _analysis_budget, _subsample_indices, analyze_swing
+from baseball_swing_analyzer.analyzer import (
+    _adaptive_sample_indices,
+    _analysis_budget,
+    _subsample_indices,
+    analyze_swing,
+)
 
 
 def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
@@ -44,10 +49,30 @@ def test_analysis_budget_uses_gpu_settings() -> None:
          patch.dict("os.environ", {}, clear=False):
         target_fps, max_frames = _analysis_budget()
 
-    assert target_fps == 15.0
-    assert max_frames == 48
+    assert target_fps == 24.0
+    assert max_frames == 72
 
 
 def test_subsample_indices_respect_max_frames() -> None:
     indices = _subsample_indices(300, 30.0, 15.0, 48)
     assert len(indices) == 48
+
+
+def test_adaptive_sample_indices_focus_on_motion_window() -> None:
+    motion = np.zeros(300, dtype=np.float32)
+    motion[120:181] = 10.0
+
+    indices = _adaptive_sample_indices(300, 30.0, 24.0, 72, motion)
+
+    assert len(indices) == 72
+    in_window = [idx for idx in indices if 120 <= idx <= 180]
+    assert len(in_window) >= 40
+
+
+def test_adaptive_sample_indices_fall_back_when_motion_is_flat() -> None:
+    motion = np.zeros(300, dtype=np.float32)
+
+    adaptive = _adaptive_sample_indices(300, 30.0, 24.0, 72, motion)
+    uniform = _subsample_indices(300, 30.0, 24.0, 72)
+
+    assert adaptive == uniform
