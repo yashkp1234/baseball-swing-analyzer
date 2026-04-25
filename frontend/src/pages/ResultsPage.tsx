@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Box } from "lucide-react";
 import { Card, CardTitle } from "@/components/Card";
@@ -24,6 +25,7 @@ const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const [currentFrame, setCurrentFrame] = useState(0);
 
   const statusQuery = useQuery({
     queryKey: ["status", jobId],
@@ -96,7 +98,12 @@ export function ResultsPage() {
               <p className="mb-4 max-w-3xl px-1 text-sm leading-6 text-[var(--color-text-dim)]">
                 This is the evidence layer for the report. Use it to confirm the written summary against the actual swing.
               </p>
-              <VideoPlayer src={videoSrc} />
+              <VideoPlayer
+                src={videoSrc}
+                fps={metrics.fps}
+                selectedFrame={currentFrame}
+                onFrameChange={setCurrentFrame}
+              />
 
               <div className="mt-4 space-y-4">
                 <Link
@@ -115,7 +122,6 @@ export function ResultsPage() {
 
         <ImprovementPlan
           nextSteps={executiveSummary.nextSteps}
-          coaching={resultsQuery.data?.coaching ?? []}
           flags={metrics.flags}
         />
 
@@ -123,6 +129,8 @@ export function ResultsPage() {
           analysis={resultsQuery.data?.analysis}
           metrics={metrics}
           metricDefinitions={DISPLAY_METRICS}
+          currentFrame={currentFrame}
+          onFrameSelect={setCurrentFrame}
         />
       </main>
     </div>

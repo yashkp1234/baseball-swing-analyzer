@@ -14,9 +14,11 @@ interface DetailsDiagnosticsProps {
   analysis: AnalysisSummaryData | null | undefined;
   metrics: SwingMetrics;
   metricDefinitions: DiagnosticMetricDefinition[];
+  currentFrame?: number;
+  onFrameSelect?: (frame: number) => void;
 }
 
-export function DetailsDiagnostics({ analysis, metrics, metricDefinitions }: DetailsDiagnosticsProps) {
+export function DetailsDiagnostics({ analysis, metrics, metricDefinitions, currentFrame, onFrameSelect }: DetailsDiagnosticsProps) {
   return (
     <section
       aria-label="Details and diagnostics"
@@ -53,7 +55,18 @@ export function DetailsDiagnostics({ analysis, metrics, metricDefinitions }: Det
 
           <Card className="rounded-[20px] bg-[var(--color-surface)]/72">
             <CardTitle>Phase Timeline</CardTitle>
-            <PhaseTimeline phaseLabels={metrics.phase_labels} />
+            <p className="mb-3 text-sm leading-6 text-[var(--color-text-dim)]">
+              Select a phase to jump the annotated video.
+            </p>
+            <PhaseTimeline
+              phaseLabels={metrics.phase_labels}
+              phaseDurations={metrics.phase_durations}
+              totalFrames={metrics.frames}
+              stridePlantFrame={metrics.stride_plant_frame}
+              contactFrame={metrics.contact_frame}
+              currentFrame={currentFrame}
+              onFrameSelect={onFrameSelect}
+            />
             <div className="mt-2 flex flex-wrap gap-4 text-xs text-[var(--color-text-dim)]">
               <span>Stride plant: frame {metrics.stride_plant_frame ?? "-"}</span>
               <span>Contact: frame {metrics.contact_frame}</span>

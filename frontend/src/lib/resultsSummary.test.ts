@@ -45,7 +45,7 @@ describe("buildExecutiveSummary", () => {
     expect(summary.label).toBe("Game-ready foundation");
     expect(summary.summary).toContain("game-ready foundation");
     expect(summary.strengths.length).toBeGreaterThan(0);
-    expect(summary.nextSteps).toEqual(coaching.map((line) => line.text));
+    expect(summary.nextSteps).toEqual(coaching);
   });
 
   test("floors a poor swing score and surfaces the cleanup label", () => {
@@ -74,5 +74,9 @@ describe("buildExecutiveSummary", () => {
     expect(summary.score).toBe(40);
     expect(summary.label).toBe("Needs cleanup");
     expect(summary.issues.length).toBeGreaterThan(0);
+    expect(summary.nextSteps[0]).toEqual({
+      tone: "warn",
+      text: "hips leak early, which can flatten the sequence before the barrel turns loose",
+    });
   });
 });

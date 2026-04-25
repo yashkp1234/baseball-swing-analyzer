@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { renderToStaticMarkup } from "react-dom/server";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+import { PhaseTimeline } from "@/components/PhaseTimeline";
 import type { AnalysisSummary, JobResults, JobStatus, SwingMetrics } from "@/lib/api";
 import { ResultsPage } from "@/pages/ResultsPage";
 
@@ -124,5 +125,40 @@ describe("ResultsPage", () => {
     expect(nextActionsStart).toBeLessThan(detailsStart);
     expect(detailsStart).toBeLessThan(timelineStart);
     expect(timelineStart).toBeLessThan(metricsStart);
+  });
+
+  test("renders an interactive timeline with marker callouts inside diagnostics", () => {
+    mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({ data: results } as never);
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/results/job-123"]}>
+        <Routes>
+          <Route path="/results/:jobId" element={<ResultsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain("Select a phase to jump the annotated video.");
+    expect(html).toContain('type="button"');
+    expect(html).toContain("Stride plant");
+    expect(html).toContain("Contact");
+  });
+});
+
+describe("PhaseTimeline", () => {
+  test("marks the selected segment and exposes phase guidance for focus and hover", () => {
+    const html = renderToStaticMarkup(
+      <PhaseTimeline
+        phaseLabels={["load", "load", "stride", "stride", "contact"]}
+        currentFrame={3}
+        contactFrame={4}
+        stridePlantFrame={2}
+      />,
+    );
+
+    expect(html).toContain('aria-pressed="true"');
+    expect(html).toContain("Gathering move that stores tension before the swing starts forward.");
+    expect(html).toContain("Move into foot strike so the body can brace before rotation.");
+    expect(html).toContain("Barrel enters the hit window and meets the ball.");
   });
 });

@@ -7,10 +7,15 @@ export interface ExecutiveSummaryModel {
   summary: string;
   strengths: string[];
   issues: string[];
-  nextSteps: string[];
+  nextSteps: ExecutiveSummaryStep[];
 }
 
 type ScoreZone = "good" | "moderate" | "poor";
+
+export interface ExecutiveSummaryStep {
+  text: string;
+  tone: CoachingLine["tone"];
+}
 
 const SCORED_METRICS: Array<keyof SwingMetrics> = [
   "x_factor_at_contact",
@@ -103,16 +108,23 @@ function pickIssues(metrics: SwingMetrics): string[] {
 function pickNextSteps(
   coaching: CoachingLine[] | null | undefined,
   issues: string[],
-): string[] {
-  const coachingLines = (coaching ?? []).map((line) => line.text.trim()).filter(Boolean);
+): ExecutiveSummaryStep[] {
+  const coachingLines = (coaching ?? [])
+    .map((line) => ({ text: line.text.trim(), tone: line.tone }))
+    .filter((line) => line.text);
   if (coachingLines.length > 0) {
     return coachingLines.slice(0, 4);
   }
 
-  return issues.map((issue) => issue.replace(/^The /, "").replace(/\.$/, "")).slice(0, 3);
+  return issues
+    .map((issue) => ({
+      text: issue.replace(/^The /, "").replace(/\.$/, ""),
+      tone: "warn" as const,
+    }))
+    .slice(0, 3);
 }
 
-function buildSummary(label: string, score: number, strengths: string[], nextSteps: string[]): string {
+function buildSummary(label: string, score: number, strengths: string[], nextSteps: ExecutiveSummaryStep[]): string {
   const opener =
     score >= 85
       ? `This swing shows a ${label.toLowerCase()}.`
@@ -120,7 +132,7 @@ function buildSummary(label: string, score: number, strengths: string[], nextSte
         ? "This swing has a solid foundation with room to sharpen."
         : "This swing needs cleaner movement before the power can play consistently.";
 
-  return [opener, strengths[0], nextSteps[0] ? `Next priority: ${nextSteps[0]}` : null].filter(Boolean).join(" ");
+  return [opener, strengths[0], nextSteps[0] ? `Next priority: ${nextSteps[0].text}` : null].filter(Boolean).join(" ");
 }
 
 export function buildExecutiveSummary(
