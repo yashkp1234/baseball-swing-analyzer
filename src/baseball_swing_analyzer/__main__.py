@@ -17,6 +17,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--hand", choices=["auto", "right", "left"], default="auto", help="Batter handedness (default: auto-detect).")
     parser.add_argument("--annotate", action="store_true", help="Write annotated output video(s).")
     parser.add_argument("--coach", action="store_true", help="Generate coaching report.")
+    parser.add_argument("--vision", action="store_true", help="Send key frames to cloud vision model for qualitative analysis.")
     parser.add_argument("--ollama-url", default=None, help="Ollama Cloud API base URL.")
     parser.add_argument("--ollama-key", default=None, help="Ollama Cloud API key.")
     args = parser.parse_args(argv)
@@ -41,8 +42,8 @@ def _run_single(args: argparse.Namespace) -> int:
     print(f"Metrics written to {json_path}")
     print(summarize_metrics(result))
 
-    if args.coach:
-        _write_coaching_report(result, args, output_dir=args.output)
+    if args.coach or args.vision:
+        _write_coaching_report(result, args, video_path=args.video, output_dir=args.output)
     return 0
 
 
@@ -61,8 +62,8 @@ def _run_batch(args: argparse.Namespace) -> int:
         result = analyze_swing(vid, output_dir=out, annotate=args.annotate, handedness=args.hand)
         write_metrics_json(result, out / "metrics.json")
         reports.append(result)
-        if args.coach:
-            _write_coaching_report(result, args, output_dir=out)
+        if args.coach or args.vision:
+            _write_coaching_report(result, args, video_path=vid, output_dir=out)
         print(f"Analyzed {vid.name}")
 
     session = build_session_report(reports)
@@ -73,7 +74,7 @@ def _run_batch(args: argparse.Namespace) -> int:
     return 0
 
 
-def _write_coaching_report(result: dict, args: argparse.Namespace, *, output_dir: Path) -> None:
+def _write_coaching_report(result: dict, args: argparse.Namespace, *, video_path: Path, output_dir: Path) -> None:
     from baseball_swing_analyzer.ai.knowledge import generate_static_report
 
     static_cues = generate_static_report(result)
@@ -82,32 +83,57 @@ def _write_coaching_report(result: dict, args: argparse.Namespace, *, output_dir
     for cue in static_cues:
         report_lines.append(f"- {cue}")
 
-    try:
-        from baseball_swing_analyzer.ai import (
-            AiClient,
-            build_coaching_prompt,
-            parse_coaching_text,
-        )
+    if args.coach:
+        try:
+            from baseball_swing_analyzer.ai import (
+                AiClient,
+                build_coaching_prompt,
+                parse_coaching_text,
+            )
 
-        client = AiClient(
-            base_url=args.ollama_url, api_key=args.ollama_key, model="mistral"
-        )
-        prompt = build_coaching_prompt(result)
-        raw = client.chat(
-            system="You are an MLB-level hitting coach. Be concise and actionable.",
-            user=prompt,
-        )
-        bullets = parse_coaching_text(raw)
-        report_lines.extend(["", "### AI-Generated Insights", ""])
-        for b in bullets:
-            report_lines.append(f"- {b}")
-        report_path.write_text("\n".join(report_lines), encoding="utf-8")
-    except Exception:
-        report_lines.extend(
-            ["", "*Note: Cloud AI unavailable — showing offline coaching cues only.*"]
-        )
-        report_path.write_text("\n".join(report_lines), encoding="utf-8")
+            client = AiClient(
+                base_url=args.ollama_url, api_key=args.ollama_key
+            )
+            prompt = build_coaching_prompt(result)
+            raw = client.chat(
+                system="You are an MLB-level hitting coach. Be concise and actionable.",
+                user=prompt,
+            )
+            bullets = parse_coaching_text(raw)
+            report_lines.extend(["", "### AI-Generated Insights", ""])
+            for b in bullets:
+                report_lines.append(f"- {b}")
+        except Exception:
+            report_lines.extend(
+                ["", "*Note: Cloud AI unavailable for text coaching.*"]
+            )
 
+    if args.vision:
+        try:
+            from baseball_swing_analyzer.ai import (
+                AiClient,
+                reason_about_swing,
+            )
+
+            client = AiClient(
+                base_url=args.ollama_url, api_key=args.ollama_key
+            )
+            phase_labels = result.get("phase_labels", [])
+            vision_text = reason_about_swing(
+                video_path=video_path,
+                metrics=result,
+                phase_labels=phase_labels,
+                client=client,
+            )
+            report_lines.extend(["", "### Vision Model Analysis", ""])
+            for line in vision_text.splitlines():
+                report_lines.append(line)
+        except Exception as e:
+            report_lines.extend(
+                ["", f"*Note: Cloud vision analysis failed: {e}*"]
+            )
+
+    report_path.write_text("\n".join(report_lines), encoding="utf-8")
     print(f"\nCoaching report written to {report_path}")
     print("\n".join(f"- {c}" for c in static_cues))
 

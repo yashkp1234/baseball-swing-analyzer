@@ -71,4 +71,5 @@ def build_report(
     report["wrist_peak_velocity_px_s"] = float(vel.max())
     report["frames"] = T
     report["fps"] = fps
+    report["phase_labels"] = phase_labels
     return report

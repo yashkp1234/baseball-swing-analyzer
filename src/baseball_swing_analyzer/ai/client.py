@@ -1,6 +1,13 @@
 """Thin HTTP client for Ollama Cloud + generic vision API."""
 
+import os
 from typing import Any
+
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 
 def _default_httpx_client():
@@ -10,15 +17,29 @@ def _default_httpx_client():
 
 
 def _default_ollama_url() -> str:
-    import os
-
-    return os.environ.get("OLLAMA_URL", "https://api.ollama.com/v1")
+    return os.environ.get("OLLAMA_URL", "https://ollama.com/v1")
 
 
 def _default_ollama_key() -> str:
-    import os
-
     return os.environ.get("OLLAMA_API_KEY", "")
+
+
+def _default_model() -> str:
+    return os.environ.get("OLLAMA_MODEL", "kimi-k2.5")
+
+
+def _extract_response(data: dict) -> str:
+    """Extract text from an Ollama Cloud chat completion response.
+
+    Some models (e.g. kimi-k2.5) return their output in a ``reasoning`` field
+    with empty ``content``. We fall back to ``reasoning`` when ``content`` is
+    absent or empty.
+    """
+    choice = data["choices"][0]["message"]
+    text = choice.get("content") or ""
+    if not text:
+        text = choice.get("reasoning") or ""
+    return text
 
 
 class AiClient:
@@ -28,12 +49,12 @@ class AiClient:
         self,
         base_url: str | None = None,
         api_key: str | None = None,
-        model: str = "mistral",
+        model: str | None = None,
         client: Any | None = None,
     ):
         self.base_url = base_url or _default_ollama_url()
         self.api_key = api_key or _default_ollama_key()
-        self.model = model
+        self.model = model or _default_model()
         self._client = client
 
     def _get_client(self):
@@ -59,24 +80,32 @@ class AiClient:
             f"{self.base_url}/chat/completions", json=payload, headers=headers
         )
         resp.raise_for_status()
-        data = resp.json()
-        return str(data["choices"][0]["message"]["content"])
+        return _extract_response(resp.json())
 
-    def vision(self, image_b64_uri: str, prompt: str, model: str | None = None) -> str:
-        """Send a vision request with a base64 image. Returns short analysis text."""
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": image_b64_uri}},
-                ],
-            }
-        ]
+    def vision(
+        self,
+        prompt: str,
+        images: list[str] | str,
+        model: str | None = None,
+        max_tokens: int = 400,
+    ) -> str:
+        """Send a vision request with one or more base64 data-URI images.
+
+        *images* can be a single ``data:image/jpeg;base64,...`` string
+        or a list of them.
+        """
+        if isinstance(images, str):
+            images = [images]
+
+        content: list[dict[str, Any]] = [{"type": "text", "text": prompt}]
+        for img in images:
+            content.append({"type": "image_url", "image_url": {"url": img}})
+
+        messages = [{"role": "user", "content": content}]
         payload = {
             "model": model or self.model,
             "messages": messages,
-            "max_tokens": 200,
+            "max_tokens": max_tokens,
             "stream": False,
         }
         headers = {"Content-Type": "application/json"}
@@ -86,5 +115,4 @@ class AiClient:
             f"{self.base_url}/chat/completions", json=payload, headers=headers
         )
         resp.raise_for_status()
-        data = resp.json()
-        return str(data["choices"][0]["message"]["content"])
+        return _extract_response(resp.json())

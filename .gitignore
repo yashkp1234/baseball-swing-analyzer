@@ -37,5 +37,9 @@ tests_output_*/
 data/videos/
 *.m4a
 
+# Environment variables
+.env
+.env.*
+
 # Claude memory
 .claude/
