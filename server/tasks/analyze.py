@@ -83,8 +83,6 @@ def run_analysis(job_id: str) -> None:
             progress=1.0,
             current_step="done",
             metrics_json=json.dumps(result, default=str),
-            coaching_html=coaching_html,
-            frames_3d_json=frames_3d_json,
             completed_at=datetime.now(timezone.utc).isoformat(),
         )
 

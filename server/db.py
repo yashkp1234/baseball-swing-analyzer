@@ -20,8 +20,6 @@ CREATE TABLE IF NOT EXISTS jobs (
     progress REAL NOT NULL DEFAULT 0.0,
     current_step TEXT,
     metrics_json TEXT,
-    coaching_html TEXT,
-    frames_3d_json TEXT,
     error_message TEXT,
     created_at TEXT NOT NULL,
     completed_at TEXT
