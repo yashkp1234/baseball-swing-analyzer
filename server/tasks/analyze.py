@@ -61,6 +61,7 @@ def run_analysis(job_id: str) -> None:
         (out_dir / "coaching.md").write_text(
             "\n".join(f"- {c}" for c in coaching_lines), encoding="utf-8"
         )
+        result["_coaching_lines"] = coaching_lines
 
         db.update_job(job_id, progress=0.85, current_step="generating_3d_data")
 

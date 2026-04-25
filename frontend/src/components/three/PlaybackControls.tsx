@@ -1,4 +1,3 @@
-import { useCallback, useRef, useState } from "react";
 import { Slider } from "@/components/ui/Slider";
 
 interface PlaybackControlsProps {
@@ -11,7 +10,6 @@ interface PlaybackControlsProps {
   onPlayPause: () => void;
   onSpeedChange: (speed: number) => void;
   phaseLabels: string[];
-  contactFrame: number;
 }
 
 const SPEEDS = [0.25, 0.5, 1, 2];
@@ -26,7 +24,6 @@ export function PlaybackControls({
   onPlayPause,
   onSpeedChange,
   phaseLabels,
-  contactFrame,
 }: PlaybackControlsProps) {
   const currentPhase = phaseLabels[currentFrame] ?? "";
   const timeSeconds = (currentFrame / fps).toFixed(2);

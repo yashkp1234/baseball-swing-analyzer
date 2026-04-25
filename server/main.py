@@ -2,8 +2,10 @@
 
 import logging
 import os
+import time
 from contextlib import asynccontextmanager
 
+import numpy as np
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -15,11 +17,23 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
     datefmt="%H:%M:%S",
 )
+logger = logging.getLogger("swingmetrics")
+
+
+def _warm_models() -> None:
+    t0 = time.perf_counter()
+    from baseball_swing_analyzer.pose import _get_pose_model, extract_pose
+
+    dummy = np.zeros((480, 640, 3), dtype=np.uint8)
+    _get_pose_model()
+    extract_pose(dummy)
+    logger.info(f"Models warmed in {time.perf_counter() - t0:.1f}s")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     db.init_db()
+    _warm_models()
     yield
 
 

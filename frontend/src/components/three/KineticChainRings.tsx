@@ -18,7 +18,6 @@ export function KineticChainRings({ hipScore, shoulderScore, overallScore, cente
     const t = state.clock.getElapsedTime();
     [hipRef, shoulderRef, handRef].forEach((ref, i) => {
       if (!ref.current) return;
-      const sc = ref.current.scale.x;
       const target = 0.3 + Math.sin(t * 2 + i * 1.5) * 0.02;
       ref.current.scale.setScalar(target);
     });

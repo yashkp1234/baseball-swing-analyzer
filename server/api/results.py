@@ -9,6 +9,23 @@ from .. import db
 router = APIRouter()
 
 
+def _coaching_lines(lines: list[str] | None) -> list[dict[str, str]] | None:
+    if lines is None:
+        return None
+
+    out: list[dict[str, str]] = []
+    for line in lines:
+        lower = line.lower()
+        if any(word in lower for word in ("good", "solid", "strong")):
+            tone = "good"
+        elif any(word in lower for word in ("improvement", "consider", "watch", "focus")):
+            tone = "warn"
+        else:
+            tone = "info"
+        out.append({"tone": tone, "text": line})
+    return out
+
+
 @router.get("/{job_id}/results")
 async def get_results(job_id: str):
     job = db.get_job(job_id)
@@ -18,10 +35,11 @@ async def get_results(job_id: str):
         return {"error": "job not ready", "status": job["status"]}
 
     metrics = json.loads(job["metrics_json"]) if job["metrics_json"] else None
+    coaching = metrics.pop("_coaching_lines", None) if metrics else None
     return {
         "job_id": job["id"],
         "status": job["status"],
         "metrics": metrics,
-        "coaching": metrics.pop("_coaching_lines", None) if metrics else None,
+        "coaching": _coaching_lines(coaching),
         "frames_3d_url": f"/api/jobs/{job['id']}/artifacts/frames_3d.json",
     }

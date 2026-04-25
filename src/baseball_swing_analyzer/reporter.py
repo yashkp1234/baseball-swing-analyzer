@@ -12,7 +12,7 @@ def write_metrics_json(
     output_path: Path,
 ) -> None:
     """Write *metrics* dict to *output_path* as JSON."""
-    output_path.write_text(json.dumps(metrics, indent=2), encoding="utf-8")
+    output_path.write_text(json.dumps(metrics, indent=2, default=str), encoding="utf-8")
 
 
 def summarize_metrics(metrics: dict) -> str:
@@ -71,6 +71,9 @@ def build_report(
 
     vel = wrist_velocity(keypoints_seq, fps)
     report["wrist_peak_velocity_px_s"] = float(vel.max())
+    torso_width = np.linalg.norm(kp_contact[5, :2] - kp_contact[6, :2])
+    report["wrist_peak_velocity_normalized"] = float(vel.max() / torso_width) if torso_width > 0 else 0.0
+    report["pose_confidence_mean"] = float(np.mean(keypoints_seq[:, :, 2]))
     report["frames"] = T
     report["fps"] = fps
     report["phase_labels"] = phase_labels

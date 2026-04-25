@@ -37,7 +37,9 @@ def _get_conn() -> sqlite3.Connection:
     if conn is None:
         conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
         conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA journal_mode=WAL")
+        conn.execute("PRAGMA journal_mode=DELETE")
+        conn.executescript(_SCHEMA)
+        conn.commit()
         _local.conn = conn
     return conn
 

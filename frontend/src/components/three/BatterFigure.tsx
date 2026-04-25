@@ -1,4 +1,4 @@
-import { useRef, useMemo } from "react";
+import { useMemo } from "react";
 import * as THREE from "three";
 import { Line } from "@react-three/drei";
 import type { Frame3D } from "./types";

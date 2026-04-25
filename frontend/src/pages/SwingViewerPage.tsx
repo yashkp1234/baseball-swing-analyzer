@@ -1,8 +1,9 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams, Link, useLocation } from "react-router-dom";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { useParams, Link } from "react-router-dom";
 import { Canvas } from "@react-three/fiber";
 import { OrbitControls, Grid, PerspectiveCamera } from "@react-three/drei";
-import { type Swing3DData } from "@/lib/api";
+import { getFrames3D } from "@/lib/api";
 import { BatterFigure } from "@/components/three/BatterFigure";
 import { VelocityArrows } from "@/components/three/VelocityArrows";
 import { EnergyLossMarker } from "@/components/three/EnergyLossMarker";
@@ -20,25 +21,24 @@ const PHASE_COLORS: Record<string, string> = {
 
 export function SwingViewerPage() {
   const { jobId } = useParams<{ jobId: string }>();
-  const location = useLocation();
-  const data = (location.state as { data?: { frames_3d?: Swing3DData } })?.data?.frames_3d as Swing3DData | undefined;
+
+  const dataQuery = useQuery({
+    queryKey: ["frames3d", jobId],
+    queryFn: () => getFrames3D(jobId!),
+    enabled: !!jobId,
+  });
+
+  const data = dataQuery.data;
+
   const [currentFrame, setCurrentFrame] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-
-  useEffect(() => {
-    if (!data || !isPlaying) return;
-    const id = setInterval(() => {
-      setCurrentFrame((prev) => (prev >= data.total_frames - 1 ? 0 : prev + 1));
-    }, 1000 / (data.fps * speed));
-    return () => clearInterval(id);
-  }, [isPlaying, data, speed]);
 
   if (!data) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Card className="max-w-md">
-          <p className="text-[var(--color-red)]">No 3D data available. Go back to results and try again.</p>
+          <p>{dataQuery.isLoading ? "Loading 3D data…" : "Failed to load 3D data."}</p>
           <Link to={jobId ? `/results/${jobId}` : "/"} className="mt-4 inline-block text-[var(--color-accent)] hover:underline">Back to Results</Link>
         </Card>
       </div>
@@ -61,9 +61,7 @@ export function SwingViewerPage() {
     .filter((e) => Math.abs(e.frame - currentFrame) < 3)
     .map((e) => {
       const f = data.frames[e.frame] ?? frame;
-      const names = data.keypoint_names;
-      const idx = names.indexOf(e.joint === "right_wrist" ? "right_wrist" : e.joint === "hip_center" ? "right_hip" : e.joint.replace("_", "") );
-      const kp = idx >= 0 ? f.keypoints[idx] : [0, 0, 0];
+      const kp = e.joint_index >= 0 ? f.keypoints[e.joint_index] : [0, 0, 0];
       return { ...e, position: kp as [number, number, number] };
     });
 

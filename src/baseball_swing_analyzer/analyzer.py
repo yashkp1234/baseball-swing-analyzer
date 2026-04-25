@@ -15,16 +15,30 @@ from .ai.flags import generate_qualitative_flags
 from .visualizer import annotate_frame
 
 
-# Target frame rate for analysis. Source at 30fps is downsampled to ~15fps (stride=2).
-_TARGET_ANALYSIS_FPS = 15.0
+# Target frame rate for analysis. Source at 30fps is downsampled to ~8fps (stride=4).
+_TARGET_ANALYSIS_FPS = 8.0
+_MAX_ANALYSIS_FRAMES = 6
 
 
 def _subsample_indices(total_frames: int, source_fps: float, target_fps: float = _TARGET_ANALYSIS_FPS) -> list[int]:
     """Return frame indices to process so the effective rate is ~*target_fps*."""
     if source_fps <= target_fps:
-        return list(range(total_frames))
-    step = max(1, round(source_fps / target_fps))
-    return list(range(0, total_frames, step))
+        indices = list(range(total_frames))
+    else:
+        step = max(1, round(source_fps / target_fps))
+        indices = list(range(0, total_frames, step))
+
+    if len(indices) > _MAX_ANALYSIS_FRAMES:
+        indices = np.linspace(0, total_frames - 1, _MAX_ANALYSIS_FRAMES, dtype=int).tolist()
+    return indices
+
+
+def _effective_fps(indices: list[int], source_fps: float) -> float:
+    """Return the approximate FPS of the sampled analysis sequence."""
+    if len(indices) < 2:
+        return min(source_fps, _TARGET_ANALYSIS_FPS)
+    sampled_duration = (indices[-1] - indices[0] + 1) / source_fps
+    return len(indices) / sampled_duration if sampled_duration > 0 else source_fps
 
 
 def analyze_swing(
@@ -32,7 +46,7 @@ def analyze_swing(
     output_dir: Path | None = None,
     annotate: bool = False,
     handedness: str = "auto",
-    tracker: str | None = "bytetrack.yaml",
+    tracker: str | None = None,
 ) -> dict:
     """Run the full pipeline on a video file.
 
@@ -50,10 +64,12 @@ def analyze_swing(
         YOLO tracker config (e.g. ``"bytetrack.yaml"``). Pass ``None`` for
         per-frame detection without tracking.
     """
-    reset_tracker()
+    if tracker is not None:
+        reset_tracker()
     props = get_video_properties(video_path)
 
     indices = _subsample_indices(props.total_frames, props.fps)
+    analysis_fps = _effective_fps(indices, props.fps)
     print(f"[Analyzer] Source: {props.total_frames} frames @ {props.fps:.1f} fps -> processing {len(indices)} frames")
 
     keypoints_list: list[NDArray[np.floating]] = []
@@ -73,7 +89,7 @@ def analyze_swing(
                 break
 
             if frame_idx == indices[processed_idx]:
-                bbox = detect_person(frame, tracker=tracker)
+                bbox = detect_person(frame, tracker=tracker) if tracker is not None else None
                 if bbox is not None:
                     kp = extract_pose(frame, bbox)
                 else:
@@ -94,8 +110,8 @@ def analyze_swing(
     keypoints_seq = np.stack(keypoints_list, axis=0)  # (T, 17, 3)
     keypoints_seq = smooth_keypoints(keypoints_seq)
 
-    phase_labels = classify_phases(keypoints_seq, fps=min(props.fps, _TARGET_ANALYSIS_FPS))
-    report = build_report(phase_labels, keypoints_seq, props.fps)
+    phase_labels = classify_phases(keypoints_seq, fps=analysis_fps)
+    report = build_report(phase_labels, keypoints_seq, analysis_fps)
     report["flags"] = generate_qualitative_flags(
         keypoints_seq, phase_labels, handedness=handedness
     )

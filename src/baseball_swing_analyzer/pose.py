@@ -11,7 +11,12 @@ _pose_model: Body | None = None
 def _get_pose_model() -> Body:
     global _pose_model
     if _pose_model is None:
-        _pose_model = Body(mode='balanced')
+        try:
+            import onnxruntime as ort
+            device = "cuda" if "CUDAExecutionProvider" in ort.get_available_providers() else "cpu"
+        except ImportError:
+            device = "cpu"
+        _pose_model = Body(mode="lightweight", backend="onnxruntime", device=device)
     return _pose_model
 
 
