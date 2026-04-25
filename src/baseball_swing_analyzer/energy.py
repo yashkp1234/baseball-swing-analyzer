@@ -28,6 +28,15 @@ COCO_RWRIST = 10
 COCO_LELBOW = 7
 COCO_RELBOW = 8
 
+JOINT_TO_KEYPOINT_IDX = {
+    "right_wrist": 10,
+    "left_wrist": 9,
+    "right_elbow": 8,
+    "left_elbow": 7,
+    "hip_center": 12,
+    "shoulder_center": 6,
+}
+
 
 def compute_velocities(
     keypoints_3d: NDArray[np.floating],
@@ -180,6 +189,7 @@ def detect_energy_loss_events(
                 events.append({
                     "frame": t,
                     "joint": name,
+                    "joint_index": JOINT_TO_KEYPOINT_IDX.get(name, -1),
                     "type": etype,
                     "magnitude_pct": round(float(drop_pct), 1),
                     "description": desc,

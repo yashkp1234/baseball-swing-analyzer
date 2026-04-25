@@ -45,6 +45,7 @@ def build_report(
         phase_durations,
         shoulder_angle,
         stride_foot_plant_frame,
+        torso_length_px,
         wrist_velocity,
         x_factor,
     )
@@ -71,8 +72,9 @@ def build_report(
 
     vel = wrist_velocity(keypoints_seq, fps)
     report["wrist_peak_velocity_px_s"] = float(vel.max())
-    torso_width = np.linalg.norm(kp_contact[5, :2] - kp_contact[6, :2])
-    report["wrist_peak_velocity_normalized"] = float(vel.max() / torso_width) if torso_width > 0 else 0.0
+    torso = torso_length_px(keypoints_seq)
+    report["torso_length_px"] = torso
+    report["wrist_peak_velocity_normalized"] = float(vel.max() / max(torso, 1.0))
     report["pose_confidence_mean"] = float(np.mean(keypoints_seq[:, :, 2]))
     report["frames"] = T
     report["fps"] = fps

@@ -26,8 +26,8 @@ RULES: list[tuple[str, MetricRule]] = [
         ),
     ),
     (
-        "wrist_peak_velocity_px_s",
-        lambda v: None if v >= 1500 else (
+        "wrist_peak_velocity_normalized",
+        lambda v: None if v >= 5.0 else (
             "Bat speed looks low — focus on a tighter hand path and earlier hip rotation to increase whip."
         ),
     ),
@@ -78,6 +78,14 @@ FLAG_CUES: dict[str, list[tuple[Callable[[Any], bool], str]]] = {
 
 def generate_static_report(metrics: dict) -> list[str]:
     """Build a coaching report from the static rule set + qualitative flags."""
+    pcm = metrics.get("pose_confidence_mean", 1.0)
+    if pcm < 0.4:
+        return [(
+            f"Pose detection confidence is low ({pcm*100:.0f}%). "
+            "Results may be unreliable — try a video with better lighting, "
+            "less occlusion, or the full body in frame."
+        )]
+
     cues: list[str] = []
 
     # Metric-based rules

@@ -134,6 +134,16 @@ def head_displacement(keypoints_seq: np.ndarray) -> float:
     return disp
 
 
+def torso_length_px(keypoints_seq: np.ndarray) -> float:
+    """Median shoulder-mid → hip-mid distance across the sequence (pixels)."""
+    seq = np.asarray(keypoints_seq, dtype=float)
+    sh_mid = (seq[:, COCO_LS, :2] + seq[:, COCO_RS, :2]) / 2
+    hp_mid = (seq[:, COCO_LH, :2] + seq[:, COCO_RH, :2]) / 2
+    d = np.linalg.norm(sh_mid - hp_mid, axis=1)
+    d = d[d > 1.0]
+    return float(np.median(d)) if len(d) else 100.0
+
+
 def wrist_velocity(keypoints_seq: np.ndarray, fps: float) -> np.ndarray:
     """Per-wrist speed in px/s, shape (T, 2) for left/right wrist."""
     seq = np.asarray(keypoints_seq, dtype=float)
@@ -181,6 +191,16 @@ def stride_foot_plant_frame(keypoints_seq: np.ndarray) -> int | None:
 
 
 def phase_durations(phase_labels: list[str]) -> dict[str, int]:
-    """Count total frames per phase label (non-contiguous grouped)."""
-    from collections import Counter
-    return dict(Counter(phase_labels))
+    """Length of the longest contiguous run per phase label."""
+    if not phase_labels:
+        return {}
+    out: dict[str, int] = {}
+    i = 0
+    while i < len(phase_labels):
+        j = i
+        while j < len(phase_labels) and phase_labels[j] == phase_labels[i]:
+            j += 1
+        run = j - i
+        out[phase_labels[i]] = max(out.get(phase_labels[i], 0), run)
+        i = j
+    return out

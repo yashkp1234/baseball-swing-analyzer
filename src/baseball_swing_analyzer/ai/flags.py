@@ -66,8 +66,7 @@ def leg_kick_or_toe_tap(
 ) -> str:
     """Classify front leg action: 'leg_kick', 'toe_tap', or 'neither'.
 
-    Leg kick: front ankle peak y during stride is significantly higher on screen than stance.
-    Toe tap: front ankle stays near stance level, minimal lift.
+    Uses torso-length-normalized thresholds so results are resolution-independent.
     """
     if "stance" not in labels or "stride" not in labels:
         return "neither"
@@ -86,9 +85,12 @@ def leg_kick_or_toe_tap(
     front_stride_y = keypoints_seq[stride_mask][:, front_idx, 1].min()
 
     lift = front_stance_y - front_stride_y  # positive = ankle lifted higher on screen
-    if lift > 30:
+
+    from baseball_swing_analyzer.metrics import torso_length_px
+    torso = torso_length_px(keypoints_seq)
+    if lift > torso * 0.15:
         return "leg_kick"
-    elif lift > 5:
+    elif lift > torso * 0.025:
         return "toe_tap"
     return "neither"
 
