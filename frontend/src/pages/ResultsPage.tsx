@@ -86,26 +86,31 @@ export function ResultsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
-        <ExecutiveSummaryHero summary={executiveSummary} />
+        <section
+          aria-label="Executive summary and annotated video"
+          className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(13,18,28,0.98),rgba(22,28,38,0.94))] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+        >
+          <div className="grid gap-0 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+            <ExecutiveSummaryHero summary={executiveSummary} embedded />
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)]">
-          <Card className="overflow-hidden rounded-[24px] p-4 lg:p-5">
-            <CardTitle className="mb-2 px-1">Annotated Video</CardTitle>
-            <p className="mb-4 max-w-3xl px-1 text-sm leading-6 text-[var(--color-text-dim)]">
-              This is the evidence layer for the report. Use it to confirm the written summary against the actual swing.
-            </p>
-            <VideoPlayer src={videoSrc} />
-          </Card>
+            <div className="border-t border-white/8 bg-[rgba(7,10,16,0.34)] p-4 lg:p-5 xl:border-l xl:border-t-0">
+              <CardTitle className="mb-2 px-1">Annotated Video</CardTitle>
+              <p className="mb-4 max-w-3xl px-1 text-sm leading-6 text-[var(--color-text-dim)]">
+                This is the evidence layer for the report. Use it to confirm the written summary against the actual swing.
+              </p>
+              <VideoPlayer src={videoSrc} />
 
-          <div className="space-y-4">
-            <Link
-              to={`/viewer/${jobId}`}
-              className="flex items-center justify-center gap-2 rounded-[20px] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-6 py-4 text-sm font-semibold text-[var(--color-accent)] transition hover:bg-[var(--color-accent)]/18"
-            >
-              <Box className="h-5 w-5" />
-              Launch 3D Swing Viewer
-            </Link>
-            <AnalysisSummary analysis={resultsQuery.data?.analysis} />
+              <div className="mt-4 space-y-4">
+                <Link
+                  to={`/viewer/${jobId}`}
+                  className="flex items-center justify-center gap-2 rounded-[20px] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-6 py-4 text-sm font-semibold text-[var(--color-accent)] transition hover:bg-[var(--color-accent)]/18"
+                >
+                  <Box className="h-5 w-5" />
+                  Launch 3D Swing Viewer
+                </Link>
+                <AnalysisSummary analysis={resultsQuery.data?.analysis} />
+              </div>
+            </div>
           </div>
         </section>
 

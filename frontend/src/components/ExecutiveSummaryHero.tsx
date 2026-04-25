@@ -3,6 +3,7 @@ import type { ExecutiveSummaryModel } from "@/lib/resultsSummary";
 
 interface ExecutiveSummaryHeroProps {
   summary: ExecutiveSummaryModel;
+  embedded?: boolean;
 }
 
 function scoreAccent(score: number): string {
@@ -11,9 +12,15 @@ function scoreAccent(score: number): string {
   return "text-[var(--color-red)]";
 }
 
-export function ExecutiveSummaryHero({ summary }: ExecutiveSummaryHeroProps) {
+export function ExecutiveSummaryHero({ summary, embedded = false }: ExecutiveSummaryHeroProps) {
   return (
-    <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(13,18,28,0.98),rgba(22,28,38,0.94))] shadow-[0_24px_80px_rgba(0,0,0,0.28)]">
+    <section
+      className={
+        embedded
+          ? "h-full"
+          : "overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(13,18,28,0.98),rgba(22,28,38,0.94))] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+      }
+    >
       <div className="border-b border-white/8 px-6 py-4 lg:px-8">
         <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/4 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-text-dim)]">
           <Radar className="h-3.5 w-3.5" />
