@@ -18,16 +18,17 @@ export function FlagBadge({ label, value, type }: FlagBadgeProps) {
     info: "bg-[var(--color-surface-2)] text-[var(--color-text-dim)] border-[var(--color-border)]",
   };
 
+  const icon = inferred === "good" ? "✓" : inferred === "warn" ? "⚠" : null;
+
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium",
+        "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium",
         colors[inferred]
       )}
     >
-      {inferred === "good" && "✓"}
-      {inferred === "warn" && "⚠"}
-      {label}: {strVal}
+      {icon && <span className="shrink-0">{icon}</span>}
+      <span>{label}: {strVal}</span>
     </span>
   );
 }

@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Play, Pause } from "lucide-react";
-import { getFrames3D } from "@/lib/api";
+import { ArrowLeft, RotateCcw } from "lucide-react";
+import { getFrames3D, artifactUrl } from "@/lib/api";
 import type { Swing3DData } from "@/lib/api";
 import { PHASE_COLORS } from "@/lib/metrics";
 import { HipShoulderDiagram } from "@/components/HipShoulderDiagram";
@@ -16,9 +16,9 @@ const PHASE_HUMAN: Record<string, string> = {
   follow_through: "Follow Through",
 };
 
-const SPEEDS = [0.25, 0.5, 1, 2];
+const SPEEDS = [0.5, 1, 2, 4];
 
-// ── Loading skeleton ─────────────────────────────────────────────────────────
+// ── Loading skeleton ──────────────────────────────────────────────────────────
 function Shimmer({ className = "" }: { className?: string }) {
   return (
     <div
@@ -32,17 +32,7 @@ function Shimmer({ className = "" }: { className?: string }) {
   );
 }
 
-function LoadingSkeleton() {
-  return (
-    <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
-      <Shimmer className="h-64" />
-      <Shimmer className="h-64" />
-      <Shimmer className="h-48 lg:col-span-2" />
-    </div>
-  );
-}
-
-// ── Section panel ────────────────────────────────────────────────────────────
+// ── Analysis panel card ───────────────────────────────────────────────────────
 function Panel({ title, subtitle, accent, children }: {
   title: string;
   subtitle?: string;
@@ -56,85 +46,20 @@ function Panel({ title, subtitle, accent, children }: {
     >
       <div>
         <h2
-          className="text-xs uppercase tracking-widest font-semibold"
+          className="text-[10px] uppercase font-semibold"
           style={{
             color: accent ?? "var(--color-text-dim)",
             fontFamily: "Barlow Condensed, sans-serif",
-            letterSpacing: "0.12em",
+            letterSpacing: "0.14em",
           }}
         >
           {title}
         </h2>
         {subtitle && (
-          <p className="text-sm text-[var(--color-text-dim)] mt-1 leading-snug">{subtitle}</p>
+          <p className="text-xs text-[var(--color-text-dim)] mt-1 leading-snug">{subtitle}</p>
         )}
       </div>
       {children}
-    </div>
-  );
-}
-
-// ── Frame scrubber ───────────────────────────────────────────────────────────
-function FrameScrubber({
-  data, currentFrame, onChange,
-}: { data: Swing3DData; currentFrame: number; onChange: (f: number) => void }) {
-  const total = data.total_frames;
-  const phase = data.phase_labels[currentFrame] ?? "—";
-  const contactPct = total > 1 ? (data.contact_frame / (total - 1)) * 100 : 50;
-  const stridePct =
-    data.stride_plant_frame != null && total > 1
-      ? (data.stride_plant_frame / (total - 1)) * 100
-      : null;
-
-  return (
-    <div className="relative w-full">
-      {/* Phase color band */}
-      <div className="flex h-1.5 rounded-full overflow-hidden mb-2.5">
-        {data.phase_labels.map((p, i) => (
-          <div
-            key={i}
-            style={{ backgroundColor: PHASE_COLORS[p] ?? "#333", width: `${100 / total}%`, opacity: 0.8 }}
-          />
-        ))}
-      </div>
-
-      {/* Markers */}
-      <div className="relative h-0">
-        {stridePct != null && (
-          <div
-            className="absolute w-1.5 h-1.5 rounded-full bg-white/60 -top-3 -translate-x-1/2"
-            style={{ left: `${stridePct}%` }}
-            title="Stride plant"
-          />
-        )}
-        <div
-          className="absolute w-2.5 h-2.5 rounded-full -top-3.5 -translate-x-1/2"
-          style={{
-            left: `${contactPct}%`,
-            backgroundColor: "#FFD700",
-            boxShadow: "0 0 6px rgba(255,215,0,0.6)",
-          }}
-          title="Contact"
-        />
-      </div>
-
-      <input
-        type="range"
-        min={0}
-        max={total - 1}
-        value={currentFrame}
-        onChange={(e) => onChange(Number(e.target.value))}
-        aria-label="Frame scrubber"
-        className="w-full h-1.5 appearance-none bg-[var(--color-surface-2)] rounded-full cursor-pointer"
-      />
-
-      <div className="flex justify-between text-[11px] text-[var(--color-text-dim)] mt-2" style={{ fontFamily: "DM Mono, monospace" }}>
-        <span>{String(currentFrame + 1).padStart(3, "0")} / {total}</span>
-        <span style={{ color: PHASE_COLORS[phase] ?? "inherit", fontFamily: "Barlow Condensed, sans-serif", letterSpacing: "0.08em", fontWeight: 600, fontSize: "0.7rem" }}>
-          {(PHASE_HUMAN[phase] ?? phase).toUpperCase()}
-        </span>
-        <span>{data.fps.toFixed(0)} FPS</span>
-      </div>
     </div>
   );
 }
@@ -145,29 +70,33 @@ export function SwingViewerPage() {
   const [data, setData] = useState<Swing3DData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [videoError, setVideoError] = useState(false);
+  const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
     if (!jobId) return;
-    getFrames3D(jobId)
-      .then(setData)
-      .catch((e) => setError(e.message));
+    getFrames3D(jobId).then(setData).catch((e) => setError(e.message));
   }, [jobId]);
 
+  // Sync currentFrame to video playback position
+  const handleTimeUpdate = useCallback(() => {
+    const vid = videoRef.current;
+    if (!vid || !data || !vid.duration) return;
+    const pct = vid.currentTime / vid.duration;
+    setCurrentFrame(Math.min(
+      Math.floor(pct * data.total_frames),
+      data.total_frames - 1
+    ));
+  }, [data]);
+
+  // Apply speed changes to the video element
   useEffect(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (!isPlaying || !data) return;
-    const ms = 1000 / (data.fps * speed);
-    intervalRef.current = setInterval(() => {
-      setCurrentFrame((f) => {
-        if (f >= data.total_frames - 1) { setIsPlaying(false); return f; }
-        return f + 1;
-      });
-    }, ms);
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current); };
-  }, [isPlaying, speed, data]);
+    if (videoRef.current) videoRef.current.playbackRate = speed;
+  }, [speed]);
+
+  const videoSrc = jobId ? artifactUrl(jobId, "annotated.mp4") : null;
+  const phase = data ? (data.phase_labels[currentFrame] ?? "—") : null;
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)] flex flex-col">
@@ -178,7 +107,9 @@ export function SwingViewerPage() {
           className="flex items-center gap-2 text-[var(--color-text-dim)] hover:text-[var(--color-text)] transition-colors"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
-          <span className="text-xs uppercase tracking-wider" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>Results</span>
+          <span className="text-xs uppercase tracking-wider" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>
+            Results
+          </span>
         </Link>
         <h1
           className="text-sm font-semibold uppercase tracking-widest"
@@ -203,14 +134,141 @@ export function SwingViewerPage() {
           </div>
         </div>
       ) : !data ? (
-        <LoadingSkeleton />
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 p-4">
+          <Shimmer className="h-full min-h-64" />
+          <div className="space-y-4">
+            <Shimmer className="h-64" />
+            <Shimmer className="h-48" />
+            <Shimmer className="h-48" />
+          </div>
+        </div>
       ) : (
-        <>
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 animate-fade-in">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-0 overflow-hidden animate-fade-in">
+
+          {/* ── LEFT: Video + controls ──────────────────────────────────── */}
+          <div className="flex flex-col border-r border-[var(--color-border)] bg-black">
+            {/* Video */}
+            <div className="relative flex-1 flex items-center justify-center bg-black min-h-48">
+              {videoSrc && !videoError ? (
+                <video
+                  ref={videoRef}
+                  src={videoSrc}
+                  className="w-full h-full object-contain"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  onTimeUpdate={handleTimeUpdate}
+                  onError={() => setVideoError(true)}
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-3 p-8 text-center">
+                  <div className="w-12 h-12 rounded-full border border-[var(--color-border)] flex items-center justify-center">
+                    <RotateCcw className="h-5 w-5 text-[var(--color-text-dim)]" />
+                  </div>
+                  <p className="text-xs text-[var(--color-text-dim)]" style={{ fontFamily: "Barlow Condensed, sans-serif" }}>
+                    {videoError ? "Annotated video unavailable" : "No video source"}
+                  </p>
+                  <p className="text-[10px] text-[var(--color-text-dim)] opacity-60">
+                    Analysis below is still available
+                  </p>
+                </div>
+              )}
+
+              {/* Phase overlay badge */}
+              {phase && (
+                <div
+                  className="absolute top-3 left-3 px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider"
+                  style={{
+                    fontFamily: "Barlow Condensed, sans-serif",
+                    backgroundColor: `${PHASE_COLORS[phase] ?? "#333"}22`,
+                    border: `1px solid ${PHASE_COLORS[phase] ?? "#333"}44`,
+                    color: PHASE_COLORS[phase] ?? "var(--color-text-dim)",
+                    letterSpacing: "0.12em",
+                    backdropFilter: "blur(4px)",
+                  }}
+                >
+                  {PHASE_HUMAN[phase] ?? phase}
+                </div>
+              )}
+
+              {/* Frame counter */}
+              <div
+                className="absolute top-3 right-3 px-2 py-1 rounded text-[10px] opacity-70"
+                style={{
+                  fontFamily: "DM Mono, monospace",
+                  backgroundColor: "rgba(0,0,0,0.6)",
+                  color: "var(--color-text-dim)",
+                }}
+              >
+                {String(currentFrame + 1).padStart(3, "0")} / {data.total_frames}
+              </div>
+            </div>
+
+            {/* Video controls */}
+            <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] p-4 space-y-3 shrink-0">
+              {/* Phase color strip */}
+              <div className="flex h-1 rounded-full overflow-hidden">
+                {data.phase_labels.map((p, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      backgroundColor: PHASE_COLORS[p] ?? "#333",
+                      width: `${100 / data.total_frames}%`,
+                      opacity: i === currentFrame ? 1 : 0.5,
+                    }}
+                  />
+                ))}
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                {/* Auto-loop indicator */}
+                <div className="flex items-center gap-1.5">
+                  <RotateCcw className="h-3 w-3 text-[var(--color-accent)]" />
+                  <span
+                    className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]"
+                    style={{ fontFamily: "Barlow Condensed, sans-serif", letterSpacing: "0.1em" }}
+                  >
+                    Looping
+                  </span>
+                </div>
+
+                {/* FPS */}
+                <span
+                  className="text-[10px] text-[var(--color-text-dim)]"
+                  style={{ fontFamily: "DM Mono, monospace" }}
+                >
+                  {data.fps.toFixed(0)} FPS
+                </span>
+
+                {/* Speed buttons */}
+                <div className="flex gap-1">
+                  {SPEEDS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => setSpeed(s)}
+                      className="px-2 py-0.5 rounded text-[10px] transition-colors"
+                      style={{
+                        fontFamily: "DM Mono, monospace",
+                        backgroundColor: speed === s ? "var(--color-accent)" : "var(--color-surface-2)",
+                        color: speed === s ? "var(--color-bg)" : "var(--color-text-dim)",
+                        fontWeight: speed === s ? 700 : 400,
+                      }}
+                    >
+                      {s}×
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* ── RIGHT: Analysis panels ──────────────────────────────────── */}
+          <div className="overflow-y-auto p-4 space-y-4">
             <ErrorBoundary>
               <Panel
                 title="Hip vs Shoulder Rotation"
-                subtitle="Top-down view — how your hips and shoulders moved through the swing"
+                subtitle="Top-down view — hips and shoulders through the swing"
                 accent="#4A90D9"
               >
                 <HipShoulderDiagram
@@ -235,60 +293,17 @@ export function SwingViewerPage() {
               </Panel>
             </ErrorBoundary>
 
-            <div className="lg:col-span-2">
-              <ErrorBoundary>
-                <Panel
-                  title="What If You Fixed This?"
-                  subtitle="Drag the sliders to see how improving these two mechanics would change your score"
-                  accent="#FFD700"
-                >
-                  <WhatIfSimulator metrics={data.metrics as unknown as SwingMetrics} />
-                </Panel>
-              </ErrorBoundary>
-            </div>
-          </div>
-
-          {/* Scrubber bar */}
-          <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-6 py-4 shrink-0">
-            <div className="flex items-center gap-4">
-              <button
-                onClick={() => setIsPlaying((p) => !p)}
-                aria-label={isPlaying ? "Pause" : "Play"}
-                className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all hover:brightness-110"
-                style={{
-                  backgroundColor: "var(--color-accent)",
-                  boxShadow: isPlaying ? "0 0 12px rgba(0,255,135,0.4)" : undefined,
-                }}
+            <ErrorBoundary>
+              <Panel
+                title="What If You Fixed This?"
+                subtitle="See how improving these mechanics changes your score"
+                accent="#FFD700"
               >
-                {isPlaying
-                  ? <Pause className="h-3.5 w-3.5 text-black" />
-                  : <Play className="h-3.5 w-3.5 text-black" />}
-              </button>
-
-              <div className="flex-1">
-                <FrameScrubber data={data} currentFrame={currentFrame} onChange={setCurrentFrame} />
-              </div>
-
-              <div className="flex gap-1 shrink-0">
-                {SPEEDS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => setSpeed(s)}
-                    className="px-2 py-1 rounded text-[10px] transition-colors"
-                    style={{
-                      fontFamily: "DM Mono, monospace",
-                      backgroundColor: speed === s ? "var(--color-accent)" : "var(--color-surface-2)",
-                      color: speed === s ? "var(--color-bg)" : "var(--color-text-dim)",
-                      fontWeight: speed === s ? 700 : 400,
-                    }}
-                  >
-                    {s}×
-                  </button>
-                ))}
-              </div>
-            </div>
+                <WhatIfSimulator metrics={data.metrics as unknown as SwingMetrics} />
+              </Panel>
+            </ErrorBoundary>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
