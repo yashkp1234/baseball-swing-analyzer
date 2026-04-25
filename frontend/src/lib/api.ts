@@ -76,6 +76,19 @@ export interface Swing3DData {
   keypoint_names: string[];
 }
 
+export interface ProjectionSummary {
+  exit_velocity_mph: number;
+  carry_distance_ft: number;
+  score: number;
+  notes?: string[];
+}
+
+export interface ProjectionResponse {
+  baseline: ProjectionSummary;
+  projection: ProjectionSummary;
+  viewer: Swing3DData;
+}
+
 export interface JobStatus {
   job_id: string;
   status: "queued" | "processing" | "completed" | "failed";
@@ -119,6 +132,19 @@ export async function getJobResults(jobId: string): Promise<JobResults> {
 export async function getFrames3D(jobId: string): Promise<Swing3DData> {
   const res = await fetch(`${API_BASE}/${jobId}/artifacts/frames_3d.json`);
   if (!res.ok) throw new Error(`3D data failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function projectSwing(
+  jobId: string,
+  payload: { x_factor_delta_deg: number; head_stability_delta_norm: number },
+): Promise<ProjectionResponse> {
+  const res = await fetch(`${API_BASE}/${jobId}/projection`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) throw new Error(`Projection failed: ${res.statusText}`);
   return res.json();
 }
 

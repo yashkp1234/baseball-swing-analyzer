@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from server import db
-from server.api import upload, status, results, artifacts
+from server.api import upload, status, results, artifacts, projection
 
 logging.basicConfig(
     level=logging.INFO,
@@ -55,3 +55,4 @@ app.include_router(upload.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(status.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(results.router, prefix="/api/jobs", tags=["jobs"])
 app.include_router(artifacts.router, prefix="/api/jobs", tags=["jobs"])
+app.include_router(projection.router, prefix="/api/jobs", tags=["jobs"])
