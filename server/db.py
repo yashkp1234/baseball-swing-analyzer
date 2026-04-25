@@ -1,0 +1,93 @@
+"""Simple SQLite job store — no ORM, no async, just sqlite3."""
+
+import json
+import sqlite3
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
+from concurrent.futures import ThreadPoolExecutor
+
+DB_PATH = Path(__file__).parent / "jobs.db"
+
+_SCHEMA = """
+CREATE TABLE IF NOT EXISTS jobs (
+    id TEXT PRIMARY KEY,
+    original_filename TEXT NOT NULL,
+    video_path TEXT NOT NULL,
+    output_dir TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'queued',
+    progress REAL NOT NULL DEFAULT 0.0,
+    current_step TEXT,
+    metrics_json TEXT,
+    coaching_html TEXT,
+    frames_3d_json TEXT,
+    error_message TEXT,
+    created_at TEXT NOT NULL,
+    completed_at TEXT
+);
+"""
+
+_executor = ThreadPoolExecutor(max_workers=2)
+
+
+def _get_conn() -> sqlite3.Connection:
+    conn = sqlite3.connect(str(DB_PATH))
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+
+def init_db() -> None:
+    conn = _get_conn()
+    conn.executescript(_SCHEMA)
+    conn.commit()
+    conn.close()
+
+
+def create_job(original_filename: str, video_path: str, output_dir: str) -> str:
+    job_id = str(uuid.uuid4())
+    now = datetime.now(timezone.utc).isoformat()
+    conn = _get_conn()
+    conn.execute(
+        "INSERT INTO jobs (id, original_filename, video_path, output_dir, status, created_at) VALUES (?, ?, ?, ?, 'queued', ?)",
+        (job_id, original_filename, video_path, output_dir, now),
+    )
+    conn.commit()
+    conn.close()
+    return job_id
+
+
+def get_job(job_id: str) -> dict[str, Any] | None:
+    conn = _get_conn()
+    row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+    conn.close()
+    if row is None:
+        return None
+    return dict(row)
+
+
+def update_job(job_id: str, **fields: Any) -> None:
+    if not fields:
+        return
+    set_clause = ", ".join(f"{k} = ?" for k in fields)
+    values = list(fields.values()) + [job_id]
+    conn = _get_conn()
+    conn.execute(f"UPDATE jobs SET {set_clause} WHERE id = ?", values)
+    conn.commit()
+    conn.close()
+
+
+def list_jobs(limit: int = 50) -> list[dict[str, Any]]:
+    conn = _get_conn()
+    rows = conn.execute(
+        "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
+    ).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def run_analysis_in_thread(job_id: str) -> None:
+    """Run analysis in a thread pool — suitable for FastAPI BackgroundTasks."""
+    from .tasks.analyze import run_analysis
+    _executor.submit(run_analysis, job_id)
