@@ -86,4 +86,28 @@ describe("ResultsPage", () => {
     expect(html).toContain("Executive Summary");
     expect(html).toContain("Annotated Video");
   });
+
+  test("surfaces takeaways and action plan ahead of the key metrics rail", () => {
+    mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({ data: results } as never);
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/results/job-123"]}>
+        <Routes>
+          <Route path="/results/:jobId" element={<ResultsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain("What&#x27;s working");
+    expect(html).toContain("What&#x27;s costing performance");
+    expect(html).toContain("What to improve next");
+    expect(html).toContain("Stay closed longer into launch.");
+
+    const storyStart = html.indexOf("What&#x27;s working");
+    const metricsStart = html.indexOf("Key Metrics");
+
+    expect(storyStart).toBeGreaterThan(-1);
+    expect(metricsStart).toBeGreaterThan(-1);
+    expect(storyStart).toBeLessThan(metricsStart);
+  });
 });

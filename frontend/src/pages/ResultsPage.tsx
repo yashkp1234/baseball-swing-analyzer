@@ -6,9 +6,11 @@ import { Card, CardTitle } from "@/components/Card";
 import { CoachingReport } from "@/components/CoachingReport";
 import { ExecutiveSummaryHero } from "@/components/ExecutiveSummaryHero";
 import { FlagsPanel } from "@/components/FlagsPanel";
+import { ImprovementPlan } from "@/components/ImprovementPlan";
 import { MetricCard } from "@/components/MetricCard";
 import { PhaseTimeline } from "@/components/PhaseTimeline";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
+import { SwingTakeaways } from "@/components/SwingTakeaways";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { artifactUrl, getJobResults, getJobStatus, type SwingMetrics } from "@/lib/api";
 import { buildExecutiveSummary } from "@/lib/resultsSummary";
@@ -114,8 +116,16 @@ export function ResultsPage() {
           </div>
         </section>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-          <div className="lg:col-span-2 space-y-6">
+        <SwingTakeaways strengths={executiveSummary.strengths} issues={executiveSummary.issues} />
+
+        <ImprovementPlan
+          nextSteps={executiveSummary.nextSteps}
+          coaching={resultsQuery.data?.coaching ?? []}
+          flags={metrics.flags}
+        />
+
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <div className="space-y-6">
             <Card className="rounded-[24px]">
               <CardTitle>Qualitative Flags</CardTitle>
               <FlagsPanel flags={metrics.flags} />
@@ -123,9 +133,9 @@ export function ResultsPage() {
             <CoachingReport lines={resultsQuery.data?.coaching ?? []} />
           </div>
 
-          <div className="space-y-3">
+          <Card className="rounded-[24px] p-5">
             <CardTitle className="px-1">Key Metrics</CardTitle>
-            <div className="grid grid-cols-1 gap-3">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
               {DISPLAY_METRICS.map(({ key, label }) => {
                 const value = metrics[key];
                 return (
@@ -138,7 +148,7 @@ export function ResultsPage() {
                 );
               })}
             </div>
-          </div>
+          </Card>
         </div>
 
         <Card className="rounded-[24px]">
