@@ -70,6 +70,9 @@ export interface JobStatus {
   status: "queued" | "processing" | "completed" | "failed";
   progress: number;
   current_step: string | null;
+  progress_detail_current?: number | null;
+  progress_detail_total?: number | null;
+  progress_detail_label?: string | null;
   error_message: string | null;
 }
 

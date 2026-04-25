@@ -20,12 +20,21 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT NOT NULL DEFAULT 'queued',
     progress REAL NOT NULL DEFAULT 0.0,
     current_step TEXT,
+    progress_detail_current INTEGER,
+    progress_detail_total INTEGER,
+    progress_detail_label TEXT,
     metrics_json TEXT,
     error_message TEXT,
     created_at TEXT NOT NULL,
     completed_at TEXT
 );
 """
+
+_MIGRATIONS: dict[str, str] = {
+    "progress_detail_current": "ALTER TABLE jobs ADD COLUMN progress_detail_current INTEGER",
+    "progress_detail_total": "ALTER TABLE jobs ADD COLUMN progress_detail_total INTEGER",
+    "progress_detail_label": "ALTER TABLE jobs ADD COLUMN progress_detail_label TEXT",
+}
 
 _executor = ThreadPoolExecutor(max_workers=2)
 
@@ -39,6 +48,7 @@ def _get_conn() -> sqlite3.Connection:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=DELETE")
         conn.executescript(_SCHEMA)
+        _apply_migrations(conn)
         conn.commit()
         _local.conn = conn
     return conn
@@ -47,7 +57,18 @@ def _get_conn() -> sqlite3.Connection:
 def init_db() -> None:
     conn = _get_conn()
     conn.executescript(_SCHEMA)
+    _apply_migrations(conn)
     conn.commit()
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    existing = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    for column, ddl in _MIGRATIONS.items():
+        if column not in existing:
+            conn.execute(ddl)
 
 
 def create_job(original_filename: str, video_path: str, output_dir: str) -> str:

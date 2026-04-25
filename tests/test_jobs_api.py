@@ -1,0 +1,64 @@
+"""Tests for job status and progress telemetry."""
+
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from server.api.status import get_status
+from server.tasks.analyze import run_analysis
+
+
+@pytest.mark.asyncio
+async def test_status_endpoint_returns_progress_detail_fields() -> None:
+    with patch("server.api.status.db.get_job", return_value={
+        "id": "job-123",
+        "status": "processing",
+        "progress": 0.42,
+        "current_step": "pose_inference",
+        "progress_detail_current": 12,
+        "progress_detail_total": 48,
+        "progress_detail_label": "frames",
+        "error_message": None,
+    }):
+        body = await get_status("job-123")
+
+    assert body["progress_detail_current"] == 12
+    assert body["progress_detail_total"] == 48
+    assert body["progress_detail_label"] == "frames"
+
+
+def test_run_analysis_emits_detail_progress_fields(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+    updates: list[dict] = []
+
+    def capture_update(_job_id: str, **fields):
+        updates.append(fields)
+
+    fake_result = {
+        "phase_labels": ["load", "contact"],
+        "fps": 24.0,
+        "_keypoints_seq": MagicMock(),
+    }
+
+    def fake_analyze_swing(**kwargs):
+        progress_callback = kwargs["progress_callback"]
+        progress_callback(12, 48)
+        return fake_result
+
+    with patch("server.tasks.analyze.db.get_job", return_value={
+        "id": "job-123",
+        "video_path": str(tmp_path / "video.mp4"),
+        "output_dir": str(out_dir),
+    }), \
+         patch("server.tasks.analyze.db.update_job", side_effect=capture_update), \
+         patch("baseball_swing_analyzer.analyzer.analyze_swing", side_effect=fake_analyze_swing), \
+         patch("baseball_swing_analyzer.reporter.write_metrics_json"), \
+         patch("baseball_swing_analyzer.ai.knowledge.generate_static_report", return_value=["Good move"]), \
+         patch("baseball_swing_analyzer.export_3d.generate_swing_3d_data_from_keypoints", return_value={"frames": []}):
+        run_analysis("job-123")
+
+    assert any(
+        update.get("current_step") == "pose_inference" and update.get("progress_detail_label") == "frames"
+        for update in updates
+    )

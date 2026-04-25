@@ -1,5 +1,6 @@
 """Main analyzer pipeline: video → pose → metrics."""
 
+from collections.abc import Callable
 import os
 from pathlib import Path
 
@@ -60,6 +61,7 @@ def analyze_swing(
     annotate: bool = False,
     handedness: str = "auto",
     tracker: str | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict:
     """Run the full pipeline on a video file.
 
@@ -115,6 +117,8 @@ def analyze_swing(
                 bbox_list.append(bbox)
                 if all_frames is not None:
                     all_frames.append(frame)
+                if progress_callback is not None:
+                    progress_callback(processed_idx + 1, len(indices))
                 processed_idx += 1
 
             frame_idx += 1

@@ -102,7 +102,6 @@ export function PhaseEnergyChart({ frames, phaseLabels, energyLossEvents }: Prop
                     backgroundColor: color,
                     opacity: g.hasLeak ? 1 : 0.75,
                     boxShadow: g.hasLeak ? `0 -2px 8px ${color}66` : undefined,
-                    animationDelay: `${idx * 60}ms`,
                     animation: `bar-grow 0.4s cubic-bezier(0.16, 1, 0.3, 1) both`,
                     animationDelay: `${idx * 50}ms`,
                   }}
