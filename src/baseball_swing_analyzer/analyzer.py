@@ -1,5 +1,6 @@
 """Main analyzer pipeline: video → pose → metrics."""
 
+import os
 from pathlib import Path
 
 import cv2
@@ -9,18 +10,30 @@ from numpy.typing import NDArray
 from .detection import detect_person, reset_tracker
 from .ingestion import get_video_properties, load_video
 from .phases import classify_phases
-from .pose import extract_pose, smooth_keypoints
+from .pose import extract_pose, pose_device, smooth_keypoints
 from .reporter import build_report
 from .ai.flags import generate_qualitative_flags
 from .visualizer import annotate_frame
 
 
-# Target frame rate for analysis. Source at 30fps is downsampled to ~8fps (stride=4).
-_TARGET_ANALYSIS_FPS = 8.0
-_MAX_ANALYSIS_FRAMES = 6
+_CPU_TARGET_ANALYSIS_FPS = float(os.environ.get("SWING_ANALYSIS_TARGET_FPS_CPU", "8"))
+_GPU_TARGET_ANALYSIS_FPS = float(os.environ.get("SWING_ANALYSIS_TARGET_FPS_GPU", "15"))
+_CPU_MAX_ANALYSIS_FRAMES = int(os.environ.get("SWING_ANALYSIS_MAX_FRAMES_CPU", "6"))
+_GPU_MAX_ANALYSIS_FRAMES = int(os.environ.get("SWING_ANALYSIS_MAX_FRAMES_GPU", "48"))
 
 
-def _subsample_indices(total_frames: int, source_fps: float, target_fps: float = _TARGET_ANALYSIS_FPS) -> list[int]:
+def _analysis_budget() -> tuple[float, int]:
+    if pose_device() == "cuda":
+        return _GPU_TARGET_ANALYSIS_FPS, _GPU_MAX_ANALYSIS_FRAMES
+    return _CPU_TARGET_ANALYSIS_FPS, _CPU_MAX_ANALYSIS_FRAMES
+
+
+def _subsample_indices(
+    total_frames: int,
+    source_fps: float,
+    target_fps: float,
+    max_frames: int,
+) -> list[int]:
     """Return frame indices to process so the effective rate is ~*target_fps*."""
     if source_fps <= target_fps:
         indices = list(range(total_frames))
@@ -28,15 +41,15 @@ def _subsample_indices(total_frames: int, source_fps: float, target_fps: float =
         step = max(1, round(source_fps / target_fps))
         indices = list(range(0, total_frames, step))
 
-    if len(indices) > _MAX_ANALYSIS_FRAMES:
-        indices = np.linspace(0, total_frames - 1, _MAX_ANALYSIS_FRAMES, dtype=int).tolist()
+    if len(indices) > max_frames:
+        indices = np.linspace(0, total_frames - 1, max_frames, dtype=int).tolist()
     return indices
 
 
 def _effective_fps(indices: list[int], source_fps: float) -> float:
     """Return the approximate FPS of the sampled analysis sequence."""
     if len(indices) < 2:
-        return min(source_fps, _TARGET_ANALYSIS_FPS)
+        return source_fps
     sampled_duration = (indices[-1] - indices[0] + 1) / source_fps
     return len(indices) / sampled_duration if sampled_duration > 0 else source_fps
 
@@ -67,10 +80,14 @@ def analyze_swing(
     if tracker is not None:
         reset_tracker()
     props = get_video_properties(video_path)
-
-    indices = _subsample_indices(props.total_frames, props.fps)
+    target_fps, max_frames = _analysis_budget()
+    indices = _subsample_indices(props.total_frames, props.fps, target_fps, max_frames)
     analysis_fps = _effective_fps(indices, props.fps)
-    print(f"[Analyzer] Source: {props.total_frames} frames @ {props.fps:.1f} fps -> processing {len(indices)} frames")
+    print(
+        f"[Analyzer] Source: {props.total_frames} frames @ {props.fps:.1f} fps "
+        f"-> processing {len(indices)} frames on {pose_device()} "
+        f"(target_fps={target_fps:.1f}, max_frames={max_frames})"
+    )
 
     keypoints_list: list[NDArray[np.floating]] = []
     bbox_list: list[tuple[int, int, int, int] | None] = []

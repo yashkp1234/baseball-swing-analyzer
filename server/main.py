@@ -22,12 +22,12 @@ logger = logging.getLogger("swingmetrics")
 
 def _warm_models() -> None:
     t0 = time.perf_counter()
-    from baseball_swing_analyzer.pose import _get_pose_model, extract_pose
+    from baseball_swing_analyzer.pose import _get_pose_model, extract_pose, pose_device
 
     dummy = np.zeros((480, 640, 3), dtype=np.uint8)
     _get_pose_model()
     extract_pose(dummy)
-    logger.info(f"Models warmed in {time.perf_counter() - t0:.1f}s")
+    logger.info("Models warmed on %s in %.1fs", pose_device(), time.perf_counter() - t0)
 
 
 @asynccontextmanager

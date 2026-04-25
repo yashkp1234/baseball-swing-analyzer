@@ -1,12 +1,14 @@
 """Tests for pose estimation and smoothing."""
 
+import os
+import sys
 from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pytest
 from numpy.typing import NDArray
 
-from baseball_swing_analyzer.pose import extract_pose, smooth_keypoints
+from baseball_swing_analyzer.pose import extract_pose, pose_device, smooth_keypoints
 
 
 def test_extract_pose_with_bbox() -> None:
@@ -65,3 +67,72 @@ def test_smooth_keypoints_averaging() -> None:
     smoothed = smooth_keypoints(kp, window=3)
     # Because of 'same' mode and constant line, output should still be ones
     np.testing.assert_allclose(smoothed, kp, atol=1e-5)
+
+
+def test_pose_device_falls_back_to_cpu_when_cuda_init_fails() -> None:
+    fake_ort = MagicMock()
+    fake_ort.get_available_providers.return_value = [
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider",
+    ]
+    fake_ort.preload_dlls = MagicMock()
+    cpu_model = MagicMock()
+    cpu_model.det_model.session.get_providers.return_value = ["CPUExecutionProvider"]
+    cpu_model.pose_model.session.get_providers.return_value = ["CPUExecutionProvider"]
+
+    with patch("baseball_swing_analyzer.pose._pose_model", None), \
+         patch("baseball_swing_analyzer.pose._pose_device", "cpu"), \
+         patch("baseball_swing_analyzer.pose._ort_preloaded", False), \
+         patch("baseball_swing_analyzer.pose._build_pose_model", side_effect=[RuntimeError("cuda broke"), cpu_model]), \
+         patch.dict("os.environ", {"SWING_POSE_DEVICE": "auto"}, clear=False), \
+         patch.dict(sys.modules, {"onnxruntime": fake_ort}):
+        assert pose_device() == "cpu"
+
+
+def test_pose_device_falls_back_to_cpu_when_cuda_inference_fails() -> None:
+    fake_ort = MagicMock()
+    fake_ort.get_available_providers.return_value = [
+        "CUDAExecutionProvider",
+        "CPUExecutionProvider",
+    ]
+    fake_ort.preload_dlls = MagicMock()
+
+    cuda_model = MagicMock()
+    cuda_model.det_model.session.get_providers.return_value = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    cuda_model.pose_model.session.get_providers.return_value = ["CUDAExecutionProvider", "CPUExecutionProvider"]
+    cuda_model.side_effect = RuntimeError("cudnn blew up")
+
+    cpu_model = MagicMock()
+    cpu_model.det_model.session.get_providers.return_value = ["CPUExecutionProvider"]
+    cpu_model.pose_model.session.get_providers.return_value = ["CPUExecutionProvider"]
+    cpu_model.return_value = (np.zeros((17, 2), dtype=np.float32), np.zeros(17, dtype=np.float32))
+
+    with patch("baseball_swing_analyzer.pose._pose_model", None), \
+         patch("baseball_swing_analyzer.pose._pose_device", "cpu"), \
+         patch("baseball_swing_analyzer.pose._ort_preloaded", False), \
+         patch("baseball_swing_analyzer.pose._build_pose_model", side_effect=[cuda_model, cpu_model]), \
+         patch.dict("os.environ", {"SWING_POSE_DEVICE": "auto"}, clear=False), \
+         patch.dict(sys.modules, {"onnxruntime": fake_ort}):
+        assert pose_device() == "cpu"
+
+
+def test_register_nvidia_dll_dirs_prepends_path(tmp_path) -> None:
+    user_site = tmp_path / "usersite"
+    cudnn_bin = user_site / "nvidia" / "cudnn" / "bin"
+    cublas_bin = user_site / "nvidia" / "cublas" / "bin"
+    cudnn_bin.mkdir(parents=True)
+    cublas_bin.mkdir(parents=True)
+
+    with patch("baseball_swing_analyzer.pose._dll_handles", []), \
+         patch("baseball_swing_analyzer.pose.site.getusersitepackages", return_value=str(user_site)), \
+         patch("baseball_swing_analyzer.pose.site.getsitepackages", return_value=[]), \
+         patch("baseball_swing_analyzer.pose.os.add_dll_directory", side_effect=lambda path: path), \
+         patch.dict("os.environ", {"PATH": "C:\\existing"}, clear=False):
+        from baseball_swing_analyzer.pose import _register_nvidia_dll_dirs
+
+        _register_nvidia_dll_dirs()
+
+        path_parts = os.environ["PATH"].split(os.pathsep)
+        assert str(cudnn_bin) in path_parts
+        assert str(cublas_bin) in path_parts
+        assert path_parts[-1] == "C:\\existing"

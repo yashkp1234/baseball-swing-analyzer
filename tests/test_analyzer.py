@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from baseball_swing_analyzer.analyzer import analyze_swing
+from baseball_swing_analyzer.analyzer import _analysis_budget, _subsample_indices, analyze_swing
 
 
 def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
@@ -37,3 +37,17 @@ def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
     assert "phase_durations" in result
     assert "contact_frame" in result
     assert (out_dir / "annotated.mp4").exists()
+
+
+def test_analysis_budget_uses_gpu_settings() -> None:
+    with patch("baseball_swing_analyzer.analyzer.pose_device", return_value="cuda"), \
+         patch.dict("os.environ", {}, clear=False):
+        target_fps, max_frames = _analysis_budget()
+
+    assert target_fps == 15.0
+    assert max_frames == 48
+
+
+def test_subsample_indices_respect_max_frames() -> None:
+    indices = _subsample_indices(300, 30.0, 15.0, 48)
+    assert len(indices) == 48
