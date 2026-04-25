@@ -19,9 +19,9 @@ from .visualizer import annotate_frame
 
 
 _CPU_TARGET_ANALYSIS_FPS = float(os.environ.get("SWING_ANALYSIS_TARGET_FPS_CPU", "8"))
-_GPU_TARGET_ANALYSIS_FPS = float(os.environ.get("SWING_ANALYSIS_TARGET_FPS_GPU", "24"))
+_GPU_TARGET_ANALYSIS_FPS = float(os.environ.get("SWING_ANALYSIS_TARGET_FPS_GPU", "30"))
 _CPU_MAX_ANALYSIS_FRAMES = int(os.environ.get("SWING_ANALYSIS_MAX_FRAMES_CPU", "6"))
-_GPU_MAX_ANALYSIS_FRAMES = int(os.environ.get("SWING_ANALYSIS_MAX_FRAMES_GPU", "72"))
+_GPU_MAX_ANALYSIS_FRAMES = int(os.environ.get("SWING_ANALYSIS_MAX_FRAMES_GPU", "120"))
 
 
 def _analysis_budget() -> tuple[float, int]:

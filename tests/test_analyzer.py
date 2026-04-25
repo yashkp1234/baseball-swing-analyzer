@@ -49,8 +49,8 @@ def test_analysis_budget_uses_gpu_settings() -> None:
          patch.dict("os.environ", {}, clear=False):
         target_fps, max_frames = _analysis_budget()
 
-    assert target_fps == 24.0
-    assert max_frames == 72
+    assert target_fps == 30.0
+    assert max_frames == 120
 
 
 def test_subsample_indices_respect_max_frames() -> None:
