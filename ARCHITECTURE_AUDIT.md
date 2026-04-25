@@ -1,3 +1,5 @@
+> **Historical document** — This audit was written 2026-04-24. The codebase has since been updated (YOLOv8n, async server, heuristic 3D lifter, torso-normalized metrics, direction-based kinetic chain). Some gaps noted below have been fixed. Retained for reference only.
+
 # Architecture Audit — 2026-04-24
 
 **Auditor:** orchestrator session

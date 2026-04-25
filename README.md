@@ -5,25 +5,50 @@ Analyze baseball swings from phone video and extract key biomechanical metrics w
 ## Features
 
 - **Video ingestion**: Load any mp4/MOV, detect blur, report FPS
-- **Person detection**: YOLOv8l auto-detects hitter in frame
-- **Pose estimation**: RTMO-m via rtmlib (COCO-17 keypoints, ~500MB VRAM)
+- **Person detection**: YOLOv8n auto-detects hitter in frame
+- **Pose estimation**: RTMO-m via rtmlib (COCO-17 keypoints)
 - **Keypoint smoothing**: Temporal moving average across frames
 - **Phase detection**: Rule-based (stance → load → stride → swing → contact → follow-through)
-- **Biomechanical metrics**: hip/shoulder angles, x-factor, knee flexion, spine tilt, stride timing, wrist velocity (bat speed proxy), head displacement
+- **Biomechanical metrics**: hip/shoulder angles, x-factor, knee flexion, spine tilt, stride timing, normalized wrist velocity (bat speed proxy), head displacement
+- **3D visualization**: Heuristic depth lifting with kinetic chain analysis and energy loss detection
 - **Annotated video output**: Skeleton overlay + phase labels
 - **AI coaching**: Static rule-based coaching cues + optional Ollama Cloud LLM integration
+- **Async server**: Upload video, poll for status, fetch results — no blocking
 
 ## Quickstart
+
+### CLI
 
 ```bash
 pip install -e ".[test]"
 python -m baseball_swing_analyzer --video swing.mp4 --output results/ --annotate --coach --hand auto
 ```
 
-Outputs:
-- `results/metrics.json` — all computed metrics
-- `results/annotated.mp4` — skeleton overlay video
-- `results/coaching.md` — coaching report
+### Server
+
+```bash
+pip install -e .
+uvicorn server.main:app --reload --port 8000
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The frontend talks to the server at `http://localhost:8000` by default. Set `VITE_API_URL` to override.
+
+## Server API Flow
+
+1. **Upload** `POST /api/upload` — streaming upload, returns `job_id`
+2. **Poll** `GET /api/status/{job_id}` — returns status + progress
+3. **Results** `GET /api/results/{job_id}` — metrics, coaching, 3D data URL
+4. **Artifact** `GET /api/artifacts/{job_id}/frames_3d.json` — large 3D frame data
+
+Maximum upload size: 500 MB. Allowed extensions: `.mp4`, `.mov`, `.avi`, `.mkv`.
 
 ## Metrics Glossary
 
@@ -31,7 +56,7 @@ Outputs:
 |--------|-----------------|------------|
 | x_factor_at_contact | Hip-shoulder separation (transverse plane) | 5–35° |
 | stride_plant_frame | Frame where stride foot plants | ~15–40 |
-| wrist_peak_velocity_px_s | Peak bat speed proxy | >1500 px/s |
+| wrist_peak_velocity_normalized | Peak bat speed proxy (per torso-length) | >5.0 |
 | left_knee_at_contact | Front knee flexion at contact | 10–45° |
 | right_knee_at_contact | Back knee flexion at contact | 10–40° |
 | head_displacement_total | Head movement (load→contact) | <60 px |
@@ -42,10 +67,11 @@ Outputs:
 ```
 Phone Video
     ├─ Quality gate (blur check, fps)
-    ├─ YOLOv8 person detect
+    ├─ YOLOv8n person detect
     ├─ RTMPose-m → 17 keypoints + smoothing
     ├─ Rule-based phase detection
     ├─ 2D metric extraction → JSON
+    ├─ Heuristic 3D lifting → energy analysis
     ├─ Annotated video overlay
     └─ AI coaching report (static rules + optional LLM)
 ```
@@ -53,7 +79,8 @@ Phone Video
 ## Dependencies
 
 - Python 3.10+
-- numpy, opencv-python, ultralytics, rtmlib, filterpy, httpx
+- numpy, opencv-python, ultralytics, rtmlib, filterpy, httpx, fastapi, uvicorn
+- Node.js 18+ (frontend)
 - pytest (dev)
 
 ## Tests
@@ -62,7 +89,7 @@ Phone Video
 pytest
 ```
 
-49 tests covering ingestion, detection, pose, metrics, phases, visualization, reporter, analyzer, and AI coaching.
+72 tests covering ingestion, detection, pose, metrics, phases, visualization, reporter, energy, analyzer, and AI coaching.
 
 ## License
 
