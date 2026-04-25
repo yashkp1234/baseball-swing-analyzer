@@ -7,7 +7,7 @@ import { PhaseTimeline } from "@/components/PhaseTimeline";
 import { FlagsPanel } from "@/components/FlagsPanel";
 import { CoachingReport } from "@/components/CoachingReport";
 import { VideoPlayer } from "@/components/VideoPlayer";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Box } from "lucide-react";
 
 const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
   { key: "x_factor_at_contact", label: "X-Factor" },
@@ -143,6 +143,15 @@ export function ResultsPage() {
                 ))}
               </div>
             </Card>
+
+            {/* 3D Viewer Link */}
+            <Link
+              to={`/viewer/${jobId}`}
+              className="mt-4 flex items-center justify-center gap-2 rounded-xl border-2 border-[var(--color-accent)] bg-[var(--color-accent)]/10 px-6 py-4 text-[var(--color-accent)] font-semibold hover:bg-[var(--color-accent)]/20 transition-all"
+            >
+              <Box className="h-5 w-5" />
+              Launch 3D Swing Viewer
+            </Link>
           </div>
         </div>
       </main>
