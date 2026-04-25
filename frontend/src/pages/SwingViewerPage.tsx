@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, RotateCcw } from "lucide-react";
-import { getFrames3D, artifactUrl } from "@/lib/api";
-import type { Swing3DData } from "@/lib/api";
+import { getFrames3D, getJobResults, artifactUrl } from "@/lib/api";
+import type { AnalysisSummary as AnalysisSummaryData, Swing3DData } from "@/lib/api";
 import { PHASE_COLORS } from "@/lib/metrics";
 import { HipShoulderDiagram } from "@/components/HipShoulderDiagram";
 import { PhaseEnergyChart } from "@/components/PhaseEnergyChart";
 import { WhatIfSimulator } from "@/components/WhatIfSimulator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { AnalysisSummary } from "@/components/AnalysisSummary";
 import type { SwingMetrics } from "@/lib/api";
 
 const PHASE_HUMAN: Record<string, string> = {
@@ -68,6 +69,7 @@ function Panel({ title, subtitle, accent, children }: {
 export function SwingViewerPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [data, setData] = useState<Swing3DData | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisSummaryData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [speed, setSpeed] = useState(1);
@@ -76,7 +78,12 @@ export function SwingViewerPage() {
 
   useEffect(() => {
     if (!jobId) return;
-    getFrames3D(jobId).then(setData).catch((e) => setError(e.message));
+    Promise.all([getFrames3D(jobId), getJobResults(jobId)])
+      .then(([frames, results]) => {
+        setData(frames);
+        setAnalysis(results.analysis);
+      })
+      .catch((e) => setError(e.message));
   }, [jobId]);
 
   // Sync currentFrame to video playback position
@@ -265,6 +272,8 @@ export function SwingViewerPage() {
 
           {/* ── RIGHT: Analysis panels ──────────────────────────────────── */}
           <div className="overflow-y-auto p-4 space-y-4">
+            <AnalysisSummary analysis={analysis} />
+
             <ErrorBoundary>
               <Panel
                 title="Hip vs Shoulder Rotation"

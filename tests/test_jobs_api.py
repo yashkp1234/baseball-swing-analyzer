@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from server.api.results import get_results
 from server.api.status import get_status
 from server.tasks.analyze import run_analysis
 
@@ -62,3 +63,28 @@ def test_run_analysis_emits_detail_progress_fields(tmp_path: Path) -> None:
         update.get("current_step") == "pose_inference" and update.get("progress_detail_label") == "frames"
         for update in updates
     )
+
+
+@pytest.mark.asyncio
+async def test_results_endpoint_returns_analysis_summary() -> None:
+    metrics = {
+        "contact_frame": 12,
+        "analysis": {
+            "pose_device": "cuda",
+            "sampled_frames": 72,
+            "effective_analysis_fps": 23.4,
+            "analysis_duration_ms": 5100.0,
+        },
+        "_coaching_lines": ["Good move"],
+    }
+
+    with patch("server.api.results.db.get_job", return_value={
+        "id": "job-123",
+        "status": "completed",
+        "metrics_json": __import__("json").dumps(metrics),
+    }):
+        body = await get_results("job-123")
+
+    assert body["analysis"]["pose_device"] == "cuda"
+    assert body["analysis"]["sampled_frames"] == 72
+    assert "analysis" not in body["metrics"]

@@ -5,6 +5,17 @@ export interface CoachingLine {
   text: string;
 }
 
+export interface AnalysisSummary {
+  pose_device: string;
+  source_frames: number;
+  source_fps: number;
+  sampled_frames: number;
+  effective_analysis_fps: number;
+  sampling_mode: string;
+  analysis_duration_ms: number;
+  pose_inference_duration_ms?: number;
+}
+
 export interface SwingMetrics {
   phase_durations: Record<string, number>;
   stride_plant_frame: number | null;
@@ -80,6 +91,7 @@ export interface JobResults {
   job_id: string;
   status: "completed" | "failed";
   metrics: SwingMetrics | null;
+  analysis: AnalysisSummary | null;
   coaching: CoachingLine[] | null;
   frames_3d_url: string;
 }

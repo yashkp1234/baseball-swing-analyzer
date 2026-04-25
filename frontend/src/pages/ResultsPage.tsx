@@ -8,6 +8,7 @@ import { FlagsPanel } from "@/components/FlagsPanel";
 import { CoachingReport } from "@/components/CoachingReport";
 import { VideoPlayer } from "@/components/VideoPlayer";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
+import { AnalysisSummary } from "@/components/AnalysisSummary";
 import { ArrowLeft, Box } from "lucide-react";
 
 const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
@@ -79,6 +80,8 @@ export function ResultsPage() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+        <AnalysisSummary analysis={resultsQuery.data?.analysis} />
+
         <Card>
           <CardTitle>Phase Timeline</CardTitle>
           <PhaseTimeline phaseLabels={m.phase_labels} />
