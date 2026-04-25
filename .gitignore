@@ -43,3 +43,14 @@ data/videos/
 
 # Claude memory
 .claude/
+
+# Frontend
+frontend/dist/
+frontend/node_modules/
+
+# Uploads & outputs
+uploads/
+outputs/
+
+# Server DB
+server/jobs.db
