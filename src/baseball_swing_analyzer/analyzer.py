@@ -3,6 +3,7 @@
 from collections.abc import Callable
 import os
 from pathlib import Path
+import subprocess
 import time
 
 import cv2
@@ -150,6 +151,32 @@ def _effective_fps(indices: list[int], source_fps: float) -> float:
     return len(indices) / sampled_duration if sampled_duration > 0 else source_fps
 
 
+def _transcode_video_for_browser(src_path: Path, dst_path: Path) -> None:
+    import imageio_ffmpeg
+
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    subprocess.run(
+        [
+            ffmpeg_exe,
+            "-y",
+            "-i",
+            str(src_path),
+            "-movflags",
+            "+faststart",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            str(dst_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+
 def analyze_swing(
     video_path: Path,
     output_dir: Path | None = None,
@@ -273,8 +300,9 @@ def _write_annotated_frames(
     if not frames:
         return
     h, w = frames[0].shape[:2]
+    raw_path = dst_path.with_suffix(".raw.mp4")
     writer = cv2.VideoWriter(
-        str(dst_path),
+        str(raw_path),
         cv2.VideoWriter_fourcc(*"mp4v"),
         30.0,
         (w, h),
@@ -291,3 +319,5 @@ def _write_annotated_frames(
             writer.write(out)
     finally:
         writer.release()
+    _transcode_video_for_browser(raw_path, dst_path)
+    raw_path.unlink(missing_ok=True)

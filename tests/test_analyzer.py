@@ -9,6 +9,7 @@ import pytest
 from baseball_swing_analyzer.analyzer import (
     _adaptive_sample_indices,
     _analysis_budget,
+    _transcode_video_for_browser,
     _subsample_indices,
     analyze_swing,
 )
@@ -76,3 +77,20 @@ def test_adaptive_sample_indices_fall_back_when_motion_is_flat() -> None:
     uniform = _subsample_indices(300, 30.0, 24.0, 72)
 
     assert adaptive == uniform
+
+
+def test_transcode_video_for_browser_uses_h264(tmp_path: Path) -> None:
+    src = tmp_path / "annotated.raw.mp4"
+    dst = tmp_path / "annotated.mp4"
+    src.write_bytes(b"raw-video")
+
+    with patch("imageio_ffmpeg.get_ffmpeg_exe", return_value="ffmpeg.exe"), \
+         patch("subprocess.run") as run:
+        _transcode_video_for_browser(src, dst)
+
+    cmd = run.call_args.args[0]
+    assert "ffmpeg.exe" == cmd[0]
+    assert "-c:v" in cmd and "libx264" in cmd
+    assert "yuv420p" in cmd
+    assert str(src) in cmd
+    assert str(dst) in cmd
