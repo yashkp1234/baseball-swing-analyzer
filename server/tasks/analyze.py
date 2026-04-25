@@ -66,16 +66,12 @@ def run_analysis(job_id: str) -> None:
 
         from baseball_swing_analyzer.export_3d import generate_swing_3d_data_from_keypoints
 
-        kps_path = out_dir / "keypoints.npy"
-        if kps_path.exists():
-            keypoints_seq = np.load(str(kps_path))
-            phase_labels = result.get("phase_labels", [])
-            fps = result.get("fps", 30.0)
-            frame_data = generate_swing_3d_data_from_keypoints(
-                keypoints_seq, phase_labels, fps, report=result
-            )
-        else:
-            frame_data = generate_swing_3d_data(result)
+        keypoints_seq = result.pop("_keypoints_seq")
+        phase_labels = result.get("phase_labels", [])
+        fps = result.get("fps", 30.0)
+        frame_data = generate_swing_3d_data_from_keypoints(
+            keypoints_seq, phase_labels, fps, report=result
+        )
 
         frames_3d_json = json.dumps(frame_data, default=str)
         (out_dir / "frames_3d.json").write_text(frames_3d_json, encoding="utf-8")

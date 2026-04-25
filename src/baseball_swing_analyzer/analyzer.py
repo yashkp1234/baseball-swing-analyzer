@@ -99,6 +99,7 @@ def analyze_swing(
     report["flags"] = generate_qualitative_flags(
         keypoints_seq, phase_labels, handedness=handedness
     )
+    report["_keypoints_seq"] = keypoints_seq
 
     if annotate and output_dir is not None and all_frames is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
