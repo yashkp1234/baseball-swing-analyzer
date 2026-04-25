@@ -87,7 +87,7 @@ describe("ResultsPage", () => {
     expect(html).toContain("Annotated Video");
   });
 
-  test("surfaces takeaways and action plan ahead of the key metrics rail", () => {
+  test("folds coaching and flags into the narrative flow and demotes the raw metrics section", () => {
     mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({ data: results } as never);
 
     const html = renderToStaticMarkup(
@@ -102,9 +102,12 @@ describe("ResultsPage", () => {
     expect(html).toContain("What&#x27;s costing performance");
     expect(html).toContain("What to improve next");
     expect(html).toContain("Stay closed longer into launch.");
+    expect(html).not.toContain("Qualitative Flags");
+    expect(html).not.toContain("Coaching Report");
+    expect(html).toContain("Supporting metrics");
 
     const storyStart = html.indexOf("What&#x27;s working");
-    const metricsStart = html.indexOf("Key Metrics");
+    const metricsStart = html.indexOf("Supporting metrics");
 
     expect(storyStart).toBeGreaterThan(-1);
     expect(metricsStart).toBeGreaterThan(-1);

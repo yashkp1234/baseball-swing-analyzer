@@ -3,9 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Box } from "lucide-react";
 import { AnalysisSummary } from "@/components/AnalysisSummary";
 import { Card, CardTitle } from "@/components/Card";
-import { CoachingReport } from "@/components/CoachingReport";
 import { ExecutiveSummaryHero } from "@/components/ExecutiveSummaryHero";
-import { FlagsPanel } from "@/components/FlagsPanel";
 import { ImprovementPlan } from "@/components/ImprovementPlan";
 import { MetricCard } from "@/components/MetricCard";
 import { PhaseTimeline } from "@/components/PhaseTimeline";
@@ -124,33 +122,6 @@ export function ResultsPage() {
           flags={metrics.flags}
         />
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-          <div className="space-y-6">
-            <Card className="rounded-[24px]">
-              <CardTitle>Qualitative Flags</CardTitle>
-              <FlagsPanel flags={metrics.flags} />
-            </Card>
-            <CoachingReport lines={resultsQuery.data?.coaching ?? []} />
-          </div>
-
-          <Card className="rounded-[24px] p-5">
-            <CardTitle className="px-1">Key Metrics</CardTitle>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {DISPLAY_METRICS.map(({ key, label }) => {
-                const value = metrics[key];
-                return (
-                  <MetricCard
-                    key={key as string}
-                    label={label}
-                    value={typeof value === "number" ? value : String(value)}
-                    metricKey={key as string}
-                  />
-                );
-              })}
-            </div>
-          </Card>
-        </div>
-
         <Card className="rounded-[24px]">
           <CardTitle>Phase Timeline</CardTitle>
           <PhaseTimeline phaseLabels={metrics.phase_labels} />
@@ -159,6 +130,32 @@ export function ResultsPage() {
             <span>Contact: frame {metrics.contact_frame}</span>
             <span>Total: {metrics.frames} frames @ {metrics.fps.toFixed(1)} fps</span>
             <span>Pose confidence: {(metrics.pose_confidence_mean * 100).toFixed(0)}%</span>
+          </div>
+        </Card>
+
+        <Card className="rounded-[24px] bg-[var(--color-surface)]/78 p-5">
+          <div className="mb-4 flex flex-col gap-2 px-1 md:flex-row md:items-end md:justify-between">
+            <div>
+              <CardTitle className="mb-1 px-0">Supporting metrics</CardTitle>
+              <p className="max-w-3xl text-sm leading-6 text-[var(--color-text-dim)]">
+                Keep these numbers as a reference layer behind the story above, then use the annotated swing to confirm
+                what matters most.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
+            {DISPLAY_METRICS.map(({ key, label }) => {
+              const value = metrics[key];
+              return (
+                <MetricCard
+                  key={key as string}
+                  label={label}
+                  value={typeof value === "number" ? value : String(value)}
+                  metricKey={key as string}
+                  className="bg-[var(--color-surface-2)]/50 p-4"
+                />
+              );
+            })}
           </div>
         </Card>
       </main>
