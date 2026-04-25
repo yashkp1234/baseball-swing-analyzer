@@ -21,6 +21,8 @@ def summarize_metrics(metrics: dict) -> str:
     for name, value in metrics.items():
         if name == "flags" and isinstance(value, dict):
             lines.append(f"  {name:30s} {str(value):10s}")
+        elif name == "phase_labels":
+            continue
         elif isinstance(value, float):
             lines.append(f"  {name:30s} {value:10.2f}")
         else:

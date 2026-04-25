@@ -14,6 +14,7 @@ def _mock_results(boxes: NDArray[np.floating], classes: NDArray[np.floating]) ->
     result = MagicMock()
     result.boxes.xyxy.cpu().numpy.return_value = boxes
     result.boxes.cls.cpu().numpy.return_value = classes
+    result.boxes.id = None
     return [result]
 
 
@@ -22,7 +23,7 @@ def test_detect_person_no_result() -> None:
     mock_model.predict.return_value = [MagicMock(boxes=MagicMock(xyxy=MagicMock()))]
     mock_model.predict.return_value[0].boxes = None
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    assert detect_person(frame, model=mock_model) is None
+    assert detect_person(frame, model=mock_model, tracker=None) is None
 
 
 def test_detect_person_largest() -> None:
@@ -40,7 +41,7 @@ def test_detect_person_largest() -> None:
     mock_model.predict.return_value = _mock_results(boxes, classes)
 
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    bbox = detect_person(frame, model=mock_model)
+    bbox = detect_person(frame, model=mock_model, tracker=None)
     assert bbox == (0, 0, 50, 50)
 
 
@@ -50,4 +51,4 @@ def test_detect_person_no_person_class() -> None:
     classes = np.array([5], dtype=np.float32)
     mock_model.predict.return_value = _mock_results(boxes, classes)
     frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    assert detect_person(frame, model=mock_model) is None
+    assert detect_person(frame, model=mock_model, tracker=None) is None
