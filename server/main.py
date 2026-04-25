@@ -32,7 +32,7 @@ app.add_middleware(
 
 
 @app.post("/api/analyze")
-async def analyze(video: UploadFile = File(...)):
+def analyze(video: UploadFile = File(...)):
     """Upload a swing video, run the full pipeline, return all results."""
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -43,7 +43,7 @@ async def analyze(video: UploadFile = File(...)):
 
     logger.info(f"[{job_id[:8]}] Receiving upload: {video.filename} ({video.size if hasattr(video, 'size') else '?'} bytes)")
 
-    content = await video.read()
+    content = video.file.read()
     saved_path.write_bytes(content)
     logger.info(f"[{job_id[:8]}] Saved to {saved_path} ({len(content)} bytes)")
 
