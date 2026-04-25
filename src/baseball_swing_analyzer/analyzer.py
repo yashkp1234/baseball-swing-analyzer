@@ -6,7 +6,7 @@ import cv2
 import numpy as np
 from numpy.typing import NDArray
 
-from .detection import detect_person
+from .detection import detect_person, reset_tracker
 from .ingestion import get_video_properties, load_video
 from .phases import classify_phases
 from .pose import extract_pose, smooth_keypoints
@@ -15,13 +15,26 @@ from .ai.flags import generate_qualitative_flags
 from .visualizer import annotate_frame
 
 
+# Target frame rate for analysis. Source at 30fps is downsampled to ~15fps (stride=2).
+_TARGET_ANALYSIS_FPS = 15.0
+
+
+def _subsample_indices(total_frames: int, source_fps: float, target_fps: float = _TARGET_ANALYSIS_FPS) -> list[int]:
+    """Return frame indices to process so the effective rate is ~*target_fps*."""
+    if source_fps <= target_fps:
+        return list(range(total_frames))
+    step = max(1, round(source_fps / target_fps))
+    return list(range(0, total_frames, step))
+
+
 def analyze_swing(
     video_path: Path,
     output_dir: Path | None = None,
     annotate: bool = False,
     handedness: str = "auto",
+    tracker: str | None = "bytetrack.yaml",
 ) -> dict:
-    """Run the full Phase 1 pipeline on a video file.
+    """Run the full pipeline on a video file.
 
     Parameters
     ----------
@@ -31,58 +44,89 @@ def analyze_swing(
         If given and *annotate* is True, the annotated video is written here.
     annotate :
         Whether to produce an annotated output video.
-
-    Returns
-    -------
-    metrics dict
+    handedness :
+        Batter handedness: ``"auto"``, ``"right"``, or ``"left"``.
+    tracker :
+        YOLO tracker config (e.g. ``"bytetrack.yaml"``). Pass ``None`` for
+        per-frame detection without tracking.
     """
+    reset_tracker()
     props = get_video_properties(video_path)
+
+    indices = _subsample_indices(props.total_frames, props.fps)
+    print(f"[Analyzer] Source: {props.total_frames} frames @ {props.fps:.1f} fps -> processing {len(indices)} frames")
 
     keypoints_list: list[NDArray[np.floating]] = []
     bbox_list: list[tuple[int, int, int, int] | None] = []
+    all_frames: list[np.ndarray] | None = [] if annotate else None
 
-    for frame in load_video(video_path):
-        bbox = detect_person(frame)
-        if bbox is not None:
-            kp = extract_pose(frame, bbox)
-        else:
-            kp = extract_pose(frame)
-        keypoints_list.append(kp)
-        bbox_list.append(bbox)
+    cap = cv2.VideoCapture(str(video_path))
+    try:
+        frame_idx = 0
+        processed_idx = 0
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret:
+                break
+
+            if processed_idx >= len(indices):
+                break
+
+            if frame_idx == indices[processed_idx]:
+                bbox = detect_person(frame, tracker=tracker)
+                if bbox is not None:
+                    kp = extract_pose(frame, bbox)
+                else:
+                    kp = extract_pose(frame)
+                keypoints_list.append(kp)
+                bbox_list.append(bbox)
+                if all_frames is not None:
+                    all_frames.append(frame)
+                processed_idx += 1
+
+            frame_idx += 1
+    finally:
+        cap.release()
+
+    if not keypoints_list:
+        raise RuntimeError("No frames were processed.")
 
     keypoints_seq = np.stack(keypoints_list, axis=0)  # (T, 17, 3)
     keypoints_seq = smooth_keypoints(keypoints_seq)
 
-    phase_labels = classify_phases(keypoints_seq, fps=props.fps)
+    phase_labels = classify_phases(keypoints_seq, fps=min(props.fps, _TARGET_ANALYSIS_FPS))
     report = build_report(phase_labels, keypoints_seq, props.fps)
-    report["flags"] = generate_qualitative_flags(keypoints_seq, phase_labels, handedness=handedness)
+    report["flags"] = generate_qualitative_flags(
+        keypoints_seq, phase_labels, handedness=handedness
+    )
 
-    if annotate and output_dir is not None:
+    if annotate and output_dir is not None and all_frames is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
         out_path = output_dir / "annotated.mp4"
-        _write_annotated_video(video_path, out_path, keypoints_seq, bbox_list, phase_labels)
+        _write_annotated_frames(out_path, all_frames, keypoints_seq, bbox_list, phase_labels)
 
     return report
 
 
-def _write_annotated_video(
-    src_path: Path,
+def _write_annotated_frames(
     dst_path: Path,
+    frames: list[np.ndarray],
     keypoints_seq: NDArray[np.floating],
     bbox_list: list[tuple[int, int, int, int] | None],
     phase_labels: list[str],
 ) -> None:
-    """Read *src_path* again and write annotated frames to *dst_path*."""
-    src_props = get_video_properties(src_path)
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    """Write already-read frames with overlay to *dst_path*."""
+    if not frames:
+        return
+    h, w = frames[0].shape[:2]
     writer = cv2.VideoWriter(
         str(dst_path),
-        fourcc,
-        max(1.0, src_props.fps),
-        (src_props.width, src_props.height),
+        cv2.VideoWriter_fourcc(*"mp4v"),
+        30.0,
+        (w, h),
     )
     try:
-        for idx, frame in enumerate(load_video(src_path)):
+        for idx, frame in enumerate(frames):
             label = phase_labels[idx] if idx < len(phase_labels) else ""
             bbox = bbox_list[idx] if idx < len(bbox_list) else None
             kp = keypoints_seq[idx] if idx < keypoints_seq.shape[0] else None

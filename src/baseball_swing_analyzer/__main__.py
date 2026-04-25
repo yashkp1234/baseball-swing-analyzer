@@ -16,6 +16,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--fps-scale", type=float, default=1.0, help="Scale factor for video FPS.")
     parser.add_argument("--hand", choices=["auto", "right", "left"], default="auto", help="Batter handedness (default: auto-detect).")
     parser.add_argument("--annotate", action="store_true", help="Write annotated output video(s).")
+    parser.add_argument("--no-tracker", dest="tracker", action="store_const", const=None, default="bytetrack.yaml", help="Disable ByteTrack — use per-frame largest-person detection.")
     parser.add_argument("--coach", action="store_true", help="Generate coaching report.")
     parser.add_argument("--vision", action="store_true", help="Send key frames to cloud vision model for qualitative analysis.")
     parser.add_argument("--ollama-url", default=None, help="Ollama Cloud API base URL.")
@@ -35,7 +36,7 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _run_single(args: argparse.Namespace) -> int:
-    result = analyze_swing(args.video, output_dir=args.output, annotate=args.annotate, handedness=args.hand)
+    result = analyze_swing(args.video, output_dir=args.output, annotate=args.annotate, handedness=args.hand, tracker=args.tracker)
 
     json_path = args.output / "metrics.json"
     write_metrics_json(result, json_path)
@@ -59,7 +60,7 @@ def _run_batch(args: argparse.Namespace) -> int:
     for vid in videos:
         out = args.output / vid.stem
         out.mkdir(parents=True, exist_ok=True)
-        result = analyze_swing(vid, output_dir=out, annotate=args.annotate, handedness=args.hand)
+        result = analyze_swing(vid, output_dir=out, annotate=args.annotate, handedness=args.hand, tracker=args.tracker)
         write_metrics_json(result, out / "metrics.json")
         reports.append(result)
         if args.coach or args.vision:

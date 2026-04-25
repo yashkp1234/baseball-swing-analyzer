@@ -5,6 +5,7 @@ from numpy.typing import NDArray
 
 
 PHASE_LABELS = [
+    "idle",
     "stance",
     "load",
     "stride",
@@ -14,31 +15,56 @@ PHASE_LABELS = [
 ]
 
 
+def _find_swing_start(
+    keypoints_seq: NDArray[np.floating],
+    contact: int,
+    fps: float,
+) -> int:
+    """Find the earliest frame that is part of the active swing sequence.
+
+    Searches backwards from *contact* for a sustained low-wrist-velocity
+    plateau. The frame after that plateau is treated as the start of the
+    swing (stance/load).
+    """
+    from .metrics import wrist_velocity
+
+    vel = wrist_velocity(keypoints_seq, fps)
+    max_vel = vel.max(axis=1)
+    if max_vel.max() == 0:
+        return 0
+
+    # threshold = 15% of peak  (tunable)
+    threshold = float(max_vel.max()) * 0.15
+
+    # Look for a sustained low-velocity run (>= 8 frames) before contact
+    for t in range(contact - 8, -1, -1):
+        if np.all(max_vel[t:t + 8] < threshold):
+            return t + 8
+    return 0
+
+
 def classify_phases(
     keypoints_seq: NDArray[np.floating],
-    fps: float = 60.0,
+    fps: float = 30.0,
 ) -> list[str]:
     """Assign a phase label to every frame using heuristic rules.
 
-    Rules (order matters):
-    1. **stance** — before hands begin moving backward.
-    2. **load** — hands move backward (loading / cocking phase).
-    3. **stride** — back foot/ankle moving toward plate until plant.
-    4. **swing** — bat (wrist proxy) accelerating forward after stride plant.
-    5. **contact** — nearest frame to peak wrist velocity.
-    6. **follow_through** — everything after contact.
+    Works on both short clips (entire video is the swing) and long
+    phone recordings where the batter waits before swinging (extra
+    ``"idle"`` frames).
 
     Parameters
     ----------
     keypoints_seq :
         Shape ``(T, 17, 2|3)`` COCO keypoint array.
     fps :
-        Frame rate of the source video. Used for velocity scaling.
+        Frame rate of the source video.
 
     Returns
     -------
     labels :
-        Length ``T`` list of phase strings.
+        Length ``T`` list of phase strings.  Can include ``"idle"``
+        for frames outside the detected swing window.
     """
     seq = np.asarray(keypoints_seq, dtype=float)
     if seq.ndim != 3 or seq.shape[1] != 17:
@@ -46,45 +72,62 @@ def classify_phases(
 
     T = seq.shape[0]
     if T < 4:
-        return ["stance"] * T
+        return ["idle"] * T
 
     from .metrics import (
         stride_foot_plant_frame,
         wrist_velocity,
     )
 
-    vel = wrist_velocity(seq, fps)  # (T, 2)
+    vel = wrist_velocity(seq, fps)           # (T, 2)
     max_vel = vel.max(axis=1)
     contact = int(np.argmax(max_vel))
 
+    # Detect the swing window within the longer video
+    window_start = _find_swing_start(seq, contact, fps)
+    window_len = T - window_start
+
     plant = stride_foot_plant_frame(seq)
     if plant is None:
-        plant = max(1, contact - 5)
+        plant = max(window_start + 1, contact - max(1, int(fps // 5)))
 
-    # Split load vs stance using hand movement
+    # Clamp plant so it sits inside the swing window
+    plant = max(window_start + 1, min(plant, contact - 1))
+
+    # Split stance vs load using hand movement inside the swing window
     lw = seq[:, 9, :2]
     rw = seq[:, 10, :2]
     hands = (lw + rw) / 2.0
     hand_disp = np.linalg.norm(np.diff(hands, axis=0, prepend=hands[0:1]), axis=1)
-    # Frame where cumulative backward hand displacement is greatest = end of load
-    cumdisp = np.cumsum(hand_disp)
-    load_end = int(np.searchsorted(cumdisp, cumdisp[-1] * 0.3)) if T > 10 else max(1, plant // 3)
 
-    # Clamp load_end so it never reaches or passes the contact frame
+    # Only consider cumulative displacement inside the swing window
+    window_disp = hand_disp[window_start : contact + 1]
+    if len(window_disp) > 10:
+        cumdisp = np.cumsum(window_disp)
+        # End of load = ~first third of cumulative hand motion before contact
+        load_rel = int(np.searchsorted(cumdisp, cumdisp[-1] * 0.3))
+        load_end = window_start + load_rel
+    else:
+        load_end = max(window_start + 1, plant // 3)
+
+    # Clamp load_end
     load_end = min(load_end, contact - 2)
+    load_end = max(window_start, load_end)
 
-    labels: list[str] = []
-    for t in range(T):
+    labels: list[str] = ["idle"] * T
+    for t in range(window_start, T):
         if t <= load_end:
-            labels.append("stance" if hand_disp[t] < hand_disp[load_end] * 0.2 else "load")
+            # First frame of window is always stance (standing at address).
+            is_stance = (t == window_start) or hand_disp[t] < hand_disp[load_end] * 0.15
+            labels[t] = "stance" if is_stance else "load"
         elif t < plant:
-            labels.append("stride")
+            labels[t] = "stride"
         elif t < contact:
-            labels.append("swing")
+            labels[t] = "swing"
         elif t == contact:
-            labels.append("contact")
+            labels[t] = "contact"
         else:
-            labels.append("follow_through")
+            labels[t] = "follow_through"
 
     # Refine: merge tiny stance/load clusters
     labels = _merge_short_phases(labels, min_len=3)
@@ -92,7 +135,11 @@ def classify_phases(
 
 
 def _merge_short_phases(labels: list[str], min_len: int = 3) -> list[str]:
-    """Collapse phase runs shorter than *min_len* into neighbors."""
+    """Collapse phase runs shorter than *min_len* into neighbors.
+
+    ``"idle"`` and ``"follow_through"`` are protected from merger
+    because they are often valid long stretches.
+    """
     if not labels:
         return labels
 
@@ -103,14 +150,10 @@ def _merge_short_phases(labels: list[str], min_len: int = 3) -> list[str]:
         while j < len(out) and out[j] == out[i]:
             j += 1
         run_len = j - i
-        if run_len < min_len:
-            # merge into previous or next phase
-            if i > 0:
-                phase = out[i - 1]
-            elif j < len(out):
-                phase = out[j]
-            else:
-                break
+        if run_len < min_len and out[i] not in ("idle", "follow_through"):
+            # merge into previous or next non-idle phase
+            phase = out[i - 1] if i > 0 else out[j]
+            # Prefer nearest non-idle
             for k in range(i, j):
                 out[k] = phase
         i = j
