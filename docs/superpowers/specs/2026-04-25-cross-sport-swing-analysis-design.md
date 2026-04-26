@@ -2,15 +2,14 @@
 
 ## Goal
 
-Extend the swing analyzer so it can support both baseball and softball without splitting the core biomechanics pipeline into separate products. The system should automatically classify a job as `baseball`, `softball`, or `neutral`, and then use that profile to adjust interpretation, coaching language, and projection messaging.
+Extend the swing analyzer so it can support both baseball and softball without splitting the core biomechanics pipeline into separate products. The system should automatically classify a job as `baseball` or `softball` when confidence is strong enough, and otherwise fall back to generic hitting language so it does not give baseball-specific advice by default.
 
 ## Product Contract
 
-- The app must support baseball swings, softball swings, and ambiguous swings.
+- The app must support baseball swings and softball swings.
 - Sport detection is automatic.
 - The app only commits to a sport label when it has strong evidence.
-- If evidence is weak or conflicting, the job remains in `neutral` mode for the full lifecycle of that job.
-- `neutral` mode still performs full swing analysis, but it avoids baseball-only or softball-only assumptions.
+- If evidence is weak or conflicting, the job still completes analysis but uses generic hitting advice and labels instead of baseball-specific assumptions.
 
 ## Why This Approach
 
@@ -69,7 +68,7 @@ Recommendation: no
 
 Every analyzed job gets a `sport_profile` object with:
 
-- `label`: `baseball` | `softball` | `neutral`
+- `label`: `baseball` | `softball` | `unknown`
 - `confidence`: float `0.0..1.0`
 - `context_confidence`: float `0.0..1.0`
 - `mechanics_confidence`: float `0.0..1.0`
@@ -96,9 +95,9 @@ The labeling rule is:
 
 - If both evidence buckets strongly support `baseball`, label `baseball`
 - If both evidence buckets strongly support `softball`, label `softball`
-- Otherwise label `neutral`
+- Otherwise label `unknown`
 
-There is no late relabeling. Once the job is `neutral`, it stays `neutral`.
+There is no late relabeling. Once the job is `unknown`, it stays `unknown` and uses generic cross-sport language for the full job.
 
 ### 3. Shared Core Pipeline
 
@@ -129,16 +128,16 @@ The intent is:
 - same motion model
 - different interpretation rules
 
-### 5. Neutral Mode
+### 5. Generic Fallback Mode
 
-Neutral mode is a first-class outcome, not an error state.
+Generic fallback mode is not a third sport. It is the safety path when we cannot confidently separate baseball from softball.
 
-Neutral mode behavior:
+Generic fallback behavior:
 
 - analyze the swing normally
 - show generic hitting language
 - use conservative, shared thresholds
-- avoid baseball-only references like mound, infield carry assumptions, or pitch-model assumptions
+- avoid baseball-only references
 - avoid softball-only references unless sport was confidently detected
 
 ## API and Data Contract
@@ -152,7 +151,7 @@ Example shape:
 ```json
 {
   "sport_profile": {
-    "label": "neutral",
+    "label": "unknown",
     "confidence": 0.42,
     "context_confidence": 0.38,
     "mechanics_confidence": 0.46,
@@ -170,9 +169,9 @@ The results page and viewer should surface:
 
 - `Detected sport: Baseball`
 - `Detected sport: Softball`
-- `Detected sport: Neutral`
+- `Detected sport: Not confidently detected`
 
-If neutral:
+If sport is not confidently detected:
 
 - show a short note that no strong sport signal was found
 - continue with generic swing analysis language
@@ -183,13 +182,13 @@ If neutral:
 
 - Remove any implication that the app is baseball-only
 - Show sport profile near the top summary area
-- If neutral, explain the fallback clearly but briefly
+- If sport is not confidently detected, explain the generic fallback clearly but briefly
 
 ### Viewer
 
 - Keep the 3D viewer shared
 - Replace baseball-only labels with sport-aware or generic wording
-- What If panel should avoid pretending it knows measured baseball outcomes when sport is neutral
+- What If panel should avoid pretending it knows measured baseball outcomes, especially when sport is not confidently detected
 
 ### Upload / Waiting Flow
 
@@ -209,7 +208,7 @@ Do not block this phase on perfect softball-specific calibration. It is acceptab
 
 - baseball thresholds
 - softball thresholds where obvious
-- neutral shared fallback everywhere else
+- shared generic fallback everywhere else
 
 ## Observability
 
@@ -231,8 +230,8 @@ Required tests:
 
 - strong baseball signals -> `baseball`
 - strong softball signals -> `softball`
-- mixed or weak signals -> `neutral`
-- neutral jobs do not emit baseball-only copy
+- mixed or weak signals -> `unknown`
+- unknown jobs do not emit baseball-only copy
 - existing baseball flows keep working with the new result shape
 
 Fixture-driven tests are enough initially as long as they validate the contract, not brittle visual details.
@@ -253,8 +252,8 @@ This design is successful when:
 1. Every completed job has a `sport_profile`
 2. Clearly baseball clips classify as `baseball`
 3. Clearly softball clips classify as `softball`
-4. Ambiguous clips classify as `neutral`
-5. Neutral mode uses generic swing-analysis wording throughout results and viewer
+4. Ambiguous clips fall back to generic hitting language instead of baseball-specific advice
+5. Generic fallback uses shared swing-analysis wording throughout results and viewer
 6. The current baseball flow continues to work without regression
 
 ## Open Follow-Up
