@@ -299,6 +299,18 @@ def analyze_swing(
         segment_frames = all_frames[segment_slice]
         segment_bboxes = bbox_list[segment_slice]
         _write_annotated_frames(out_path, segment_frames, keypoints_for_metrics, segment_bboxes, phase_labels)
+        if len(swing_segments) > 1:
+            for index, segment in enumerate(swing_segments, start=1):
+                per_swing_slice = slice(segment.start_frame, segment.end_frame + 1)
+                per_swing_keypoints = keypoints_seq[per_swing_slice]
+                per_swing_labels = classify_phases(per_swing_keypoints, fps=analysis_fps)
+                _write_annotated_frames(
+                    output_dir / f"annotated_swing_{index}.mp4",
+                    all_frames[per_swing_slice],
+                    per_swing_keypoints,
+                    bbox_list[per_swing_slice],
+                    per_swing_labels,
+                )
 
     return report
 

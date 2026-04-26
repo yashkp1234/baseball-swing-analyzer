@@ -145,6 +145,32 @@ describe("ResultsPage", () => {
     expect(html).toContain("Stride plant");
     expect(html).toContain("Contact");
   });
+
+  test("shows compact swing choices when multiple segments are available", () => {
+    mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({
+      data: {
+        ...results,
+        metrics: {
+          ...metrics,
+          swing_segments: [
+            { start_frame: 0, end_frame: 30, contact_frame: 20, duration_s: 1, confidence: 0.8 },
+            { start_frame: 45, end_frame: 75, contact_frame: 62, duration_s: 1, confidence: 0.9 },
+          ],
+        },
+      },
+    } as never);
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/results/job-123"]}>
+        <Routes>
+          <Route path="/results/:jobId" element={<ResultsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain("Swing 1");
+    expect(html).toContain("Swing 2");
+  });
 });
 
 describe("PhaseTimeline", () => {

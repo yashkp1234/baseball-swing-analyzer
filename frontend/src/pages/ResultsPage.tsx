@@ -26,6 +26,7 @@ const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [currentFrame, setCurrentFrame] = useState(0);
+  const [selectedSwingIndex, setSelectedSwingIndex] = useState(0);
   const videoRef = useRef<VideoPlayerHandle>(null);
 
   const statusQuery = useQuery({
@@ -71,7 +72,10 @@ export function ResultsPage() {
   if (!metrics) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
   const resolvedMetrics = metrics;
 
-  const videoSrc = artifactUrl(jobId, "annotated.mp4");
+  const swingSegments = resolvedMetrics.swing_segments ?? [];
+  const hasMultipleSwings = swingSegments.length > 1;
+  const selectedSwingNumber = selectedSwingIndex + 1;
+  const videoSrc = artifactUrl(jobId, hasMultipleSwings ? `annotated_swing_${selectedSwingNumber}.mp4` : "annotated.mp4");
   const executiveSummary = buildExecutiveSummary(resolvedMetrics, resultsQuery.data?.coaching);
 
   function handleFrameSelect(frame: number) {
@@ -105,6 +109,27 @@ export function ResultsPage() {
               <p className="mb-4 max-w-3xl px-1 text-sm leading-6 text-[var(--color-text-dim)]">
                 Review the swing clip next to the coaching summary.
               </p>
+              {hasMultipleSwings ? (
+                <div className="mb-4 flex flex-wrap gap-2 px-1" aria-label="Swing choices">
+                  {swingSegments.map((segment, index) => (
+                    <button
+                      key={`${segment.start_frame}-${segment.end_frame}`}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSwingIndex(index);
+                        setCurrentFrame(0);
+                      }}
+                      className={`rounded-md border px-3 py-1.5 text-xs font-semibold ${
+                        selectedSwingIndex === index
+                          ? "border-[var(--color-accent)] bg-[var(--color-accent)] text-[var(--color-bg)]"
+                          : "border-[var(--color-border)] bg-[var(--color-surface-2)] text-[var(--color-text)]"
+                      }`}
+                    >
+                      Swing {index + 1}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
               <VideoPlayer
                 ref={videoRef}
                 src={videoSrc}
@@ -115,7 +140,7 @@ export function ResultsPage() {
 
               <div className="mt-4 space-y-4">
                 <Link
-                  to={`/viewer/${jobId}`}
+                  to={`/viewer/${jobId}${hasMultipleSwings ? `?swing=${selectedSwingNumber}` : ""}`}
                   className="flex items-center justify-center gap-2 rounded-[20px] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-6 py-4 text-sm font-semibold text-[var(--color-accent)] transition hover:bg-[var(--color-accent)]/18"
                 >
                   <Box className="h-5 w-5" />

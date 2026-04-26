@@ -13,6 +13,7 @@ from baseball_swing_analyzer.analyzer import (
     _subsample_indices,
     analyze_swing,
 )
+from baseball_swing_analyzer.swing_segments import SwingSegment
 
 
 def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
@@ -45,6 +46,38 @@ def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
     assert "swing_segments" in result
     assert "primary_swing_segment" in result
     assert (out_dir / "annotated.mp4").exists()
+
+
+def test_analyze_swing_writes_per_swing_artifacts_when_multiple_segments(tmp_path: Path) -> None:
+    video = Path("tests/fixtures/swing_dummy.mp4")
+    out_dir = tmp_path / "output"
+
+    fake_kpts = np.zeros((60, 17, 3), dtype=np.float32)
+    fake_kpts[:, 10, 0] = np.linspace(200, 400, 60)
+    fake_kpts[:, 10, 1] = 300 - 100 * np.sin(np.linspace(0, np.pi, 60))
+    fake_kpts[:, 10, 2] = 0.95
+    call_idx = {"n": 0}
+
+    def _fake_pose(frame, bbox=None):
+        idx = call_idx["n"]
+        call_idx["n"] += 1
+        return fake_kpts[idx % 60]
+
+    segments = [
+        SwingSegment(start_frame=0, end_frame=20, contact_frame=14, duration_s=0.7, confidence=0.8),
+        SwingSegment(start_frame=30, end_frame=50, contact_frame=44, duration_s=0.7, confidence=0.9),
+    ]
+
+    with patch("baseball_swing_analyzer.analyzer.extract_pose", side_effect=_fake_pose), \
+         patch("baseball_swing_analyzer.analyzer.get_video_properties", return_value=MagicMock(width=640, height=480, fps=30.0, total_frames=60)), \
+         patch("baseball_swing_analyzer.analyzer.detect_swing_segments", return_value=segments), \
+         patch("baseball_swing_analyzer.analyzer._write_annotated_frames") as write_video:
+        analyze_swing(video, output_dir=out_dir, annotate=True)
+
+    written_names = [call.args[0].name for call in write_video.call_args_list]
+    assert "annotated.mp4" in written_names
+    assert "annotated_swing_1.mp4" in written_names
+    assert "annotated_swing_2.mp4" in written_names
 
 
 def test_analysis_budget_uses_gpu_settings() -> None:
