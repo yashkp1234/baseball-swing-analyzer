@@ -71,6 +71,13 @@ def test_run_analysis_emits_detail_progress_fields(tmp_path: Path) -> None:
 async def test_results_endpoint_returns_analysis_summary() -> None:
     metrics = {
         "contact_frame": 12,
+        "sport_profile": {
+            "label": "softball",
+            "confidence": 0.92,
+            "context_confidence": 0.95,
+            "mechanics_confidence": 0.5,
+            "reasons": ["Filename strongly suggests softball"],
+        },
         "analysis": {
             "pose_device": "cuda",
             "sampled_frames": 72,
@@ -89,6 +96,7 @@ async def test_results_endpoint_returns_analysis_summary() -> None:
 
     assert body["analysis"]["pose_device"] == "cuda"
     assert body["analysis"]["sampled_frames"] == 72
+    assert body["sport_profile"]["label"] == "softball"
     assert "analysis" not in body["metrics"]
 
 
