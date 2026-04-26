@@ -22,6 +22,8 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
   const controlsRef = useRef<OrbitControls | null>(null);
   const jointsRef = useRef<THREE.Mesh[]>([]);
   const bonesRef = useRef<THREE.Line[]>([]);
+  const batRef = useRef<THREE.Line | null>(null);
+  const ballRef = useRef<THREE.Mesh | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -39,6 +41,8 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
       }
       jointsRef.current = [];
       bonesRef.current = [];
+      batRef.current = null;
+      ballRef.current = null;
       rendererRef.current = null;
       cameraRef.current = null;
       controlsRef.current = null;
@@ -114,6 +118,26 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
         return line;
       });
 
+      const batGeometry = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        new THREE.Vector3(0, 0, 0),
+      ]);
+      const batMaterial = new THREE.LineBasicMaterial({
+        color: "#f5d36b",
+        transparent: true,
+        opacity: 0.95,
+      });
+      const batLine = new THREE.Line(batGeometry, batMaterial);
+      scene.add(batLine);
+      batRef.current = batLine;
+
+      const ball = new THREE.Mesh(
+        new THREE.SphereGeometry(0.035, 16, 16),
+        new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.35 }),
+      );
+      scene.add(ball);
+      ballRef.current = ball;
+
       const resize = () => {
         const width = Math.max(mount.clientWidth, 1);
         const height = Math.max(mount.clientHeight, 1);
@@ -178,6 +202,29 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
       bone.geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
       bone.geometry.computeBoundingSphere();
     });
+
+    const bat = frame.bat;
+    if (batRef.current) {
+      if (bat && bat.handle.length >= 3 && bat.barrel.length >= 3) {
+        batRef.current.visible = true;
+        batRef.current.geometry.setAttribute(
+          "position",
+          new THREE.BufferAttribute(new Float32Array([...bat.handle.slice(0, 3), ...bat.barrel.slice(0, 3)]), 3),
+        );
+        batRef.current.geometry.computeBoundingSphere();
+      } else {
+        batRef.current.visible = false;
+      }
+    }
+
+    const ballPosition = data.ball?.contact_position;
+    if (ballRef.current && ballPosition && ballPosition.length >= 3) {
+      const contactFrame = data.ball?.contact_frame ?? currentFrame;
+      ballRef.current.visible = Math.abs(currentFrame - contactFrame) <= 4;
+      ballRef.current.position.set(ballPosition[0], ballPosition[1], ballPosition[2]);
+    } else if (ballRef.current) {
+      ballRef.current.visible = false;
+    }
   }, [currentFrame, data]);
 
   return <div ref={mountRef} className="h-full w-full" />;
