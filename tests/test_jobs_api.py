@@ -4,10 +4,8 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-from fastapi import HTTPException
 
 from server.api.results import get_results
-from server.api.projection import ProjectionPayload, project_job
 from server.api.status import get_status
 from server.tasks.analyze import run_analysis
 
@@ -71,13 +69,6 @@ def test_run_analysis_emits_detail_progress_fields(tmp_path: Path) -> None:
 async def test_results_endpoint_returns_analysis_summary() -> None:
     metrics = {
         "contact_frame": 12,
-        "sport_profile": {
-            "label": "softball",
-            "confidence": 0.92,
-            "context_confidence": 0.95,
-            "mechanics_confidence": 0.5,
-            "reasons": ["Filename strongly suggests softball"],
-        },
         "analysis": {
             "pose_device": "cuda",
             "sampled_frames": 72,
@@ -96,61 +87,4 @@ async def test_results_endpoint_returns_analysis_summary() -> None:
 
     assert body["analysis"]["pose_device"] == "cuda"
     assert body["analysis"]["sampled_frames"] == 72
-    assert body["sport_profile"]["label"] == "softball"
     assert "analysis" not in body["metrics"]
-
-
-@pytest.mark.asyncio
-async def test_projection_endpoint_returns_projected_viewer(tmp_path: Path) -> None:
-    fixture = Path("tests/fixtures/viewer_fixture.json")
-    out_dir = tmp_path / "output"
-    out_dir.mkdir()
-    viewer = __import__("json").loads(fixture.read_text())
-    (out_dir / "frames_3d.json").write_text(__import__("json").dumps(viewer))
-    sport_profile = {
-        "label": "unknown",
-        "confidence": 0.35,
-        "context_confidence": 0.2,
-        "mechanics_confidence": 0.45,
-        "reasons": ["No strong baseball or softball signal detected"],
-    }
-
-    with patch("server.api.projection.db.get_job", return_value={
-        "id": "job-123",
-        "status": "completed",
-        "output_dir": str(out_dir),
-        "metrics_json": __import__("json").dumps({"sport_profile": sport_profile}),
-    }):
-        payload = ProjectionPayload(x_factor_delta_deg=6, head_stability_delta_norm=0.06)
-        body = await project_job("job-123", payload)
-
-    assert "baseline" in body
-    assert "projection" in body
-    assert "viewer" in body
-    assert body["sport_profile"]["label"] == "unknown"
-    assert any("generic hitting calibration" in note.lower() for note in body["projection"]["notes"])
-    assert body["projection"]["exit_velocity_mph"] > body["baseline"]["exit_velocity_mph"]
-
-
-@pytest.mark.asyncio
-async def test_projection_endpoint_404_for_missing_job() -> None:
-    with patch("server.api.projection.db.get_job", return_value=None):
-        payload = ProjectionPayload(x_factor_delta_deg=6, head_stability_delta_norm=0.06)
-        with pytest.raises(HTTPException) as exc_info:
-            await project_job("not-a-real-job", payload)
-
-    assert exc_info.value.status_code == 404
-
-
-@pytest.mark.asyncio
-async def test_projection_endpoint_409_without_artifacts(tmp_path: Path) -> None:
-    with patch("server.api.projection.db.get_job", return_value={
-        "id": "job-123",
-        "status": "completed",
-        "output_dir": str(tmp_path / "missing-output"),
-    }):
-        payload = ProjectionPayload(x_factor_delta_deg=6, head_stability_delta_norm=0.06)
-        with pytest.raises(HTTPException) as exc_info:
-            await project_job("job-123", payload)
-
-    assert exc_info.value.status_code == 409

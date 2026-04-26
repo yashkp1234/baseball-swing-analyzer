@@ -10,7 +10,7 @@ import numpy as np
 from baseball_swing_analyzer.reporter import summarize_metrics
 
 
-_PROMPT_TEMPLATE = """You are an expert hitting coach. A swing analysis pipeline has extracted the following biomechanical metrics from a phone video of a swing:
+_PROMPT_TEMPLATE = """You are an expert baseball hitting coach. A swing analysis pipeline has extracted the following biomechanical metrics from a phone video of a baseball swing:
 
 {metrics_summary}
 

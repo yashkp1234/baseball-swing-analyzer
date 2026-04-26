@@ -37,13 +37,11 @@ async def get_results(job_id: str):
     metrics = json.loads(job["metrics_json"]) if job["metrics_json"] else None
     coaching = metrics.pop("_coaching_lines", None) if metrics else None
     analysis = metrics.pop("analysis", None) if metrics else None
-    sport_profile = metrics.pop("sport_profile", None) if metrics else None
     return {
         "job_id": job["id"],
         "status": job["status"],
         "metrics": metrics,
         "analysis": analysis,
-        "sport_profile": sport_profile,
         "coaching": _coaching_lines(coaching),
         "frames_3d_url": f"/api/jobs/{job['id']}/artifacts/frames_3d.json",
     }

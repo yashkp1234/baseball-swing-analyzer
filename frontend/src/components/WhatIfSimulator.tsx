@@ -1,196 +1,164 @@
-import { useEffect, useState } from "react";
-import { LoaderCircle, RotateCcw } from "lucide-react";
-import type { ProjectionSummary, SportProfile } from "@/lib/api";
-
-export interface ProjectionInput {
-  x_factor_delta_deg: number;
-  head_stability_delta_norm: number;
-}
+import { useState } from "react";
+import { computeScore, scoreLabel } from "@/lib/scoring";
+import { METRIC_RANGES } from "@/lib/metrics";
+import type { SwingMetrics } from "@/lib/api";
 
 interface SliderRowProps {
   label: string;
-  description: string;
+  unit: string;
   value: number;
   min: number;
   max: number;
-  step: number;
-  unit: string;
-  onChange: (value: number) => void;
-  onCommit: () => void;
+  goodMin: number;
+  goodMax: number;
+  onChange: (v: number) => void;
 }
 
-function SliderRow({ label, description, value, min, max, step, unit, onChange, onCommit }: SliderRowProps) {
+function SliderRow({ label, unit, value, min, max, goodMin, goodMax, onChange }: SliderRowProps) {
+  const range = max - min;
+  const goodLeftPct = ((goodMin - min) / range) * 100;
+  const goodWidthPct = ((goodMax - goodMin) / range) * 100;
+  const inGood = value >= goodMin && value <= goodMax;
+
   return (
     <div className="space-y-2">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-xs uppercase tracking-widest text-[var(--color-text-dim)]" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>
-            {label}
-          </p>
-          <p className="mt-1 text-[11px] leading-snug text-[var(--color-text-dim)]">{description}</p>
-        </div>
-        <div className="flex items-center gap-1 rounded-md bg-[var(--color-surface-2)] px-2 py-1 text-right">
-          <input
-            type="number"
-            value={value}
-            min={min}
-            max={max}
-            step={step}
-            onChange={(event) => onChange(Number(event.target.value))}
-            onBlur={onCommit}
-            onKeyUp={(event) => {
-              if (event.key === "Enter") onCommit();
-            }}
-            className="w-20 bg-transparent text-right text-sm font-semibold text-[var(--color-text)] outline-none"
-            style={{ fontFamily: "DM Mono, monospace" }}
-          />
-          {unit ? <span className="text-xs text-[var(--color-text-dim)]">{unit}</span> : null}
+      <div className="flex justify-between items-baseline">
+        <span
+          className="text-xs uppercase tracking-widest"
+          style={{ color: "var(--color-text-dim)", fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}
+        >
+          {label}
+        </span>
+        <div className="flex items-baseline gap-1">
+          <span
+            className="text-xl font-bold"
+            style={{ color: inGood ? "var(--color-accent)" : "var(--color-red)", fontFamily: "DM Mono, monospace" }}
+          >
+            {value.toFixed(0)}{unit}
+          </span>
+          <span className="text-[10px] text-[var(--color-text-dim)]" style={{ fontFamily: "DM Mono, monospace" }}>
+            [{goodMin}–{goodMax}{unit}]
+          </span>
         </div>
       </div>
-      <input
-        type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
-        onChange={(event) => onChange(Number(event.target.value))}
-        onMouseUp={onCommit}
-        onTouchEnd={onCommit}
-        className="w-full accent-[var(--color-accent)]"
-      />
+
+      <div className="relative h-5 flex items-center">
+        {/* Base track */}
+        <div className="absolute inset-x-0 h-1.5 rounded-full bg-[var(--color-surface-2)]" />
+        {/* Good-zone highlight */}
+        <div
+          className="absolute h-1.5 rounded-full"
+          style={{
+            left: `${goodLeftPct}%`,
+            width: `${goodWidthPct}%`,
+            background: "linear-gradient(90deg, rgba(0,255,135,0.15), rgba(0,255,135,0.35), rgba(0,255,135,0.15))",
+            border: "1px solid rgba(0,255,135,0.2)",
+          }}
+        />
+        <input
+          type="range"
+          min={min}
+          max={max}
+          step={1}
+          value={value}
+          onChange={(e) => onChange(Number(e.target.value))}
+          aria-label={label}
+          className="relative w-full h-1.5 appearance-none bg-transparent cursor-pointer"
+        />
+      </div>
     </div>
   );
 }
 
 interface Props {
-  baselineXFactor: number;
-  baselineHeadDisplacementPx: number;
-  sportProfile: SportProfile | null;
-  baseline: ProjectionSummary | null;
-  projection: ProjectionSummary | null;
-  pending: boolean;
-  error: string | null;
-  resetToken: number;
-  onApply: (input: ProjectionInput) => void;
-  onReset: () => void;
+  metrics: SwingMetrics;
 }
 
-function formatRange(low: number, high: number, unit: string): string {
-  return `${low.toFixed(0)}-${high.toFixed(0)} ${unit}`;
-}
+export function WhatIfSimulator({ metrics }: Props) {
+  const xRange = METRIC_RANGES.x_factor_at_contact!;
+  const headRange = METRIC_RANGES.head_displacement_total!;
 
-export function WhatIfSimulator({
-  baselineXFactor,
-  baselineHeadDisplacementPx,
-  sportProfile,
-  baseline,
-  projection,
-  pending,
-  error,
-  resetToken,
-  onApply,
-  onReset,
-}: Props) {
-  const [draft, setDraft] = useState<ProjectionInput>({ x_factor_delta_deg: 0, head_stability_delta_norm: 0 });
+  const [xFactor, setXFactor] = useState(Math.round(metrics.x_factor_at_contact ?? 0));
+  const [headMove, setHeadMove] = useState(Math.round(metrics.head_displacement_total ?? 40));
 
-  useEffect(() => {
-    setDraft({ x_factor_delta_deg: 0, head_stability_delta_norm: 0 });
-  }, [resetToken]);
+  const currentScore = computeScore(metrics);
+  const projectedScore = computeScore(metrics, {
+    x_factor_at_contact: xFactor,
+    head_displacement_total: headMove,
+  });
 
-  const commit = () => onApply(draft);
-  const activeProjection = projection ?? baseline;
+  const diff = projectedScore - currentScore;
+  const { label: currentLabel } = scoreLabel(currentScore);
+  const { label: projLabel, color: projColor } = scoreLabel(projectedScore);
 
   return (
-    <div className="flex h-full flex-col gap-5">
-      <div className="grid grid-cols-3 gap-3">
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-[var(--color-text-dim)]" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>
-            Estimated EV
-          </p>
-          <p className="mt-2 text-2xl font-bold text-[var(--color-text)]" style={{ fontFamily: "DM Mono, monospace" }}>
-            {baseline ? formatRange(baseline.exit_velocity_mph_low, baseline.exit_velocity_mph_high, "mph") : "-"}
-          </p>
+    <div className="space-y-6">
+      {/* Score comparison */}
+      <div className="grid grid-cols-3 gap-4 items-center">
+        <div className="text-center p-4 rounded-lg bg-[var(--color-surface-2)] border border-[var(--color-border)]">
+          <p className="text-[10px] uppercase tracking-widest text-[var(--color-text-dim)] mb-1" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>Current</p>
+          <p className="text-4xl font-bold text-[var(--color-text)]" style={{ fontFamily: "DM Mono, monospace" }}>{currentScore}</p>
+          <p className="text-xs text-[var(--color-text-dim)] mt-0.5">{currentLabel}</p>
         </div>
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-[var(--color-text-dim)]" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>
-            Projected EV
-          </p>
-          <p className="mt-2 text-2xl font-bold text-[var(--color-accent)]" style={{ fontFamily: "DM Mono, monospace" }}>
-            {activeProjection ? formatRange(activeProjection.exit_velocity_mph_low, activeProjection.exit_velocity_mph_high, "mph") : "-"}
-          </p>
+
+        <div className="flex flex-col items-center gap-1">
+          <div className="h-px w-full bg-[var(--color-border)]" />
+          {diff !== 0 && (
+            <p
+              className="text-base font-bold"
+              style={{
+                color: diff > 0 ? "var(--color-accent)" : "var(--color-red)",
+                fontFamily: "DM Mono, monospace",
+              }}
+            >
+              {diff > 0 ? `+${diff}` : diff}
+            </p>
+          )}
+          {diff === 0 && (
+            <p className="text-xs text-[var(--color-text-dim)]" style={{ fontFamily: "DM Mono, monospace" }}>—</p>
+          )}
         </div>
-        <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
-          <p className="text-[10px] uppercase tracking-widest text-[var(--color-text-dim)]" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>
-            Estimated Carry
-          </p>
-          <p className="mt-2 text-2xl font-bold text-[var(--color-text)]" style={{ fontFamily: "DM Mono, monospace" }}>
-            {activeProjection ? formatRange(activeProjection.carry_distance_ft_low, activeProjection.carry_distance_ft_high, "ft") : "-"}
-          </p>
+
+        <div
+          className="text-center p-4 rounded-lg border"
+          style={{
+            background: `color-mix(in srgb, ${projColor}10, var(--color-surface-2))`,
+            borderColor: `${projColor}33`,
+          }}
+        >
+          <p className="text-[10px] uppercase tracking-widest text-[var(--color-text-dim)] mb-1" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>Projected</p>
+          <p className="text-4xl font-bold" style={{ color: projColor, fontFamily: "DM Mono, monospace" }}>{projectedScore}</p>
+          <p className="text-xs mt-0.5" style={{ color: projColor }}>{projLabel}</p>
         </div>
       </div>
 
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[11px] text-[var(--color-text-dim)]">
-        Pose-only projection using body mechanics proxies. These are directional estimate ranges, not measured ball-flight outcomes.
-        {sportProfile?.label === "unknown" ? " Using shared hitting calibration because sport was not confidently detected." : ""}
-        <span className="ml-2 font-mono text-[var(--color-text)]">
-          Score {baseline ? baseline.score : "-"}{projection ? ` -> ${projection.score}` : ""}
-        </span>
-      </div>
-
-      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-xs text-[var(--color-text-dim)]">
-        Baseline mechanics: <span className="font-mono text-[var(--color-text)]">{baselineXFactor.toFixed(1)} deg X-factor</span> and{" "}
-        <span className="font-mono text-[var(--color-text)]">{baselineHeadDisplacementPx.toFixed(1)} px head drift</span>.
-      </div>
-
+      {/* Sliders */}
       <div className="space-y-5">
         <SliderRow
-          label="Add Separation"
-          description="Positive values rotate the shoulder chain farther behind the hips into contact."
-          value={draft.x_factor_delta_deg}
-          min={-12}
-          max={12}
-          step={1}
-          unit="deg"
-          onChange={(value) => setDraft((current) => ({ ...current, x_factor_delta_deg: value }))}
-          onCommit={commit}
+          label="Hip–Shoulder Separation (X-Factor)"
+          unit="°"
+          value={xFactor}
+          min={-20}
+          max={60}
+          goodMin={xRange.good[0]}
+          goodMax={xRange.good[1]}
+          onChange={setXFactor}
         />
-
         <SliderRow
-          label="Stabilize Head"
-          description="Positive values reduce upper-body drift in the normalized 3D viewer space."
-          value={draft.head_stability_delta_norm}
-          min={-0.12}
-          max={0.12}
-          step={0.01}
-          unit=""
-          onChange={(value) => setDraft((current) => ({ ...current, head_stability_delta_norm: value }))}
-          onCommit={commit}
+          label="Head Stability"
+          unit="px"
+          value={headMove}
+          min={0}
+          max={120}
+          goodMin={headRange.good[0]}
+          goodMax={headRange.good[1]}
+          onChange={setHeadMove}
         />
       </div>
 
-      <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
-        <div className="flex items-center gap-2">
-          {pending ? <LoaderCircle className="h-4 w-4 animate-spin text-[var(--color-accent)]" /> : null}
-          <span>{pending ? "Updating projected swing..." : "Apply a change by releasing a slider."}</span>
-        </div>
-        <button
-          type="button"
-          onClick={onReset}
-          className="inline-flex items-center gap-1 rounded-md border border-[var(--color-border)] px-2 py-1 text-[var(--color-text)] hover:border-[var(--color-accent)]"
-        >
-          <RotateCcw className="h-3.5 w-3.5" />
-          Reset
-        </button>
-      </div>
-
-      {error ? <p className="text-xs text-[var(--color-red)]">{error}</p> : null}
-      {activeProjection?.notes?.length ? (
-        <ul className="space-y-1 text-xs text-[var(--color-text-dim)]">
-          {activeProjection.notes.map((note) => (
-            <li key={note}>{note}</li>
-          ))}
-        </ul>
-      ) : null}
+      <p className="text-xs text-[var(--color-text-dim)] leading-relaxed border-t border-[var(--color-border)] pt-3">
+        Green zone = target range. Drag to see how fixing mechanics changes your score.
+      </p>
     </div>
   );
 }

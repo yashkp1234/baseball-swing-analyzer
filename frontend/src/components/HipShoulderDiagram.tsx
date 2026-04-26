@@ -1,17 +1,14 @@
 import { useMemo } from "react";
 import type { Frame3D } from "@/lib/api";
 
-const L_HIP = 11;
-const R_HIP = 12;
-const L_SHOULDER = 5;
-const R_SHOULDER = 6;
+const L_HIP = 11, R_HIP = 12, L_SHOULDER = 5, R_SHOULDER = 6;
+const MIN_CONFIDENCE = 0.2;
 
-function yawAngle(kp: number[][], a: number, b: number): number | null {
-  const pa = kp[a];
-  const pb = kp[b];
+function axisAngle(kp: number[][], a: number, b: number): number | null {
+  const pa = kp[a], pb = kp[b];
   if (!pa || !pb) return null;
-  if ([pa[0], pa[2], pb[0], pb[2]].some((value) => !Number.isFinite(value))) return null;
-  return Math.atan2(pb[2] - pa[2], pb[0] - pa[0]) * (180 / Math.PI);
+  if ((pa[2] ?? 0) < MIN_CONFIDENCE || (pb[2] ?? 0) < MIN_CONFIDENCE) return null;
+  return Math.atan2(pb[1] - pa[1], pb[0] - pa[0]) * (180 / Math.PI);
 }
 
 function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: number): string {
@@ -24,13 +21,6 @@ function arcPath(cx: number, cy: number, r: number, startDeg: number, endDeg: nu
   return `M ${x1} ${y1} A ${r} ${r} 0 ${largeArc} 1 ${x2} ${y2}`;
 }
 
-function normalizeAngle(angle: number): number {
-  let value = angle;
-  while (value > 180) value -= 360;
-  while (value < -180) value += 360;
-  return value;
-}
-
 interface Props {
   frames: Frame3D[];
   currentFrame: number;
@@ -38,107 +28,144 @@ interface Props {
 }
 
 export function HipShoulderDiagram({ frames, currentFrame, contactFrame }: Props) {
+  const CX = 120, CY = 120, R_HIP_ARC = 70, R_SHOULDER_ARC = 50;
+
   const baseline = useMemo(() => {
-    const frame = frames[0];
-    if (!frame?.keypoints?.length) return null;
-    return {
-      hip: yawAngle(frame.keypoints, L_HIP, R_HIP),
-      shoulder: yawAngle(frame.keypoints, L_SHOULDER, R_SHOULDER),
-    };
+    const f = frames[0];
+    if (!f?.keypoints?.length) return null;
+    const hip = axisAngle(f.keypoints, L_HIP, R_HIP);
+    const shoulder = axisAngle(f.keypoints, L_SHOULDER, R_SHOULDER);
+    return { hip, shoulder };
   }, [frames]);
 
   const current = useMemo(() => {
-    const frame = frames[Math.min(currentFrame, Math.max(frames.length - 1, 0))];
-    if (!frame?.keypoints?.length) return null;
-    return {
-      hip: yawAngle(frame.keypoints, L_HIP, R_HIP),
-      shoulder: yawAngle(frame.keypoints, L_SHOULDER, R_SHOULDER),
-    };
-  }, [currentFrame, frames]);
+    if (!frames.length) return null;
+    const f = frames[Math.min(currentFrame, frames.length - 1)];
+    if (!f?.keypoints?.length) return null;
+    const hip = axisAngle(f.keypoints, L_HIP, R_HIP);
+    const shoulder = axisAngle(f.keypoints, L_SHOULDER, R_SHOULDER);
+    return { hip, shoulder };
+  }, [frames, currentFrame]);
 
-  const missingGeometry =
+  // Use explicit null checks (not truthy) to avoid zero-angle false negatives
+  const lowConfidence =
     baseline?.hip == null || baseline?.shoulder == null ||
     current?.hip == null || current?.shoulder == null;
 
-  if (!frames.length) {
-    return <div className="flex h-40 items-center justify-center text-sm text-[var(--color-text-dim)]">No frame data available</div>;
-  }
+  const hipDelta = lowConfidence ? 0 : (current!.hip! - baseline!.hip!);
+  const shoulderDelta = lowConfidence ? 0 : (current!.shoulder! - baseline!.shoulder!);
+  const separation = Math.round(hipDelta - shoulderDelta);
 
-  if (missingGeometry) {
+  const separationLabel =
+    separation > 5
+      ? `Hips led by ${Math.abs(separation)}° — good separation`
+      : separation < -5
+      ? `Shoulders leading hips by ${Math.abs(separation)}° — work on this`
+      : "Hips and shoulders moving together";
+
+  const separationColor =
+    separation >= 20 ? "#00FF87" : separation >= 5 ? "#D4A017" : "#FF4444";
+
+  const hipStartAngle = baseline?.hip ?? 0;
+  const hipEndAngle = hipStartAngle + hipDelta;
+  const shoulderStartAngle = baseline?.shoulder ?? 0;
+  const shoulderEndAngle = shoulderStartAngle + shoulderDelta;
+
+  if (!frames.length) {
     return (
-      <div className="flex h-40 flex-col items-center justify-center gap-2">
-        <div className="text-2xl opacity-40">◎</div>
-        <p className="text-sm text-[var(--color-text-dim)]">Insufficient 3D joint data for this frame</p>
+      <div className="flex items-center justify-center h-40 text-sm text-[var(--color-text-dim)]">
+        No frame data available
       </div>
     );
   }
 
-  const hipStart = baseline.hip as number;
-  const shoulderStart = baseline.shoulder as number;
-  const hipCurrent = current.hip as number;
-  const shoulderCurrent = current.shoulder as number;
-  const hipDelta = hipCurrent - hipStart;
-  const shoulderDelta = shoulderCurrent - shoulderStart;
-  const separation = Math.round(normalizeAngle(hipDelta - shoulderDelta));
-  const separationColor = separation >= 20 ? "#00FF87" : separation >= 5 ? "#FFD54A" : "#FF6B6B";
-  const separationLabel =
-    separation > 5
-      ? `Hips led shoulders by ${Math.abs(separation)}°`
-      : separation < -5
-        ? `Shoulders outran hips by ${Math.abs(separation)}°`
-        : "Hips and shoulders stayed mostly synced";
-
-  const cx = 120;
-  const cy = 120;
-  const hipRadius = 72;
-  const shoulderRadius = 50;
-  const hipEnd = hipStart + hipDelta;
-  const shoulderEnd = shoulderStart + shoulderDelta;
-
   return (
     <div className="flex flex-col items-center gap-3">
-      <svg width={240} height={240} viewBox="0 0 240 240" className="overflow-visible">
-        <circle cx={cx} cy={cy} r={hipRadius + 14} fill="none" stroke="#1d2430" strokeWidth={1} />
-        <circle cx={cx} cy={cy} r={shoulderRadius + 14} fill="none" stroke="#16202a" strokeDasharray="3 5" strokeWidth={1} />
-        {Array.from({ length: 12 }).map((_, index) => {
-          const angle = (index * 30 * Math.PI) / 180;
-          const r1 = hipRadius + 8;
-          const r2 = hipRadius + 14;
-          return (
-            <line
-              key={index}
-              x1={cx + r1 * Math.cos(angle)}
-              y1={cy + r1 * Math.sin(angle)}
-              x2={cx + r2 * Math.cos(angle)}
-              y2={cy + r2 * Math.sin(angle)}
-              stroke="#2a3342"
-              strokeWidth={1}
-            />
-          );
-        })}
-        <circle cx={cx} cy={cy} r={3} fill="#2A3240" />
-        {Math.abs(hipDelta) > 0.5 ? (
-          <path d={arcPath(cx, cy, hipRadius, hipStart, hipEnd)} fill="none" stroke="#ff6b6b" strokeLinecap="round" strokeWidth={6} />
-        ) : null}
-        {Math.abs(shoulderDelta) > 0.5 ? (
-          <path d={arcPath(cx, cy, shoulderRadius, shoulderStart, shoulderEnd)} fill="none" stroke="#4A90D9" strokeLinecap="round" strokeWidth={6} />
-        ) : null}
-        {currentFrame >= contactFrame ? (
-          <>
-            <circle cx={cx} cy={cy} r={hipRadius + 5} fill="none" stroke="#ffd54a" strokeDasharray="4 4" strokeWidth={1.5} opacity={0.8} />
-            <text x={cx} y={18} fill="#ffd54a" fontFamily="DM Mono, monospace" fontSize={9} opacity={0.8} textAnchor="middle">
-              CONTACT
-            </text>
-          </>
-        ) : null}
-      </svg>
+      {lowConfidence ? (
+        <div className="flex flex-col items-center justify-center h-40 gap-2">
+          <div className="text-2xl opacity-40">◎</div>
+          <p className="text-sm text-[var(--color-text-dim)]">Low pose confidence — diagram unavailable</p>
+        </div>
+      ) : (
+        <svg width={240} height={240} viewBox="0 0 240 240" className="overflow-visible">
+          {/* Outer ring */}
+          <circle cx={CX} cy={CY} r={R_HIP_ARC + 14} fill="none" stroke="#1E2530" strokeWidth={1} />
+          {/* Inner ring dashed */}
+          <circle cx={CX} cy={CY} r={R_SHOULDER_ARC + 14} fill="none" stroke="#1A1E24" strokeWidth={1} strokeDasharray="3 5" />
 
-      <div className="space-y-1 text-center">
+          {/* Radial tick marks */}
+          {Array.from({ length: 12 }).map((_, i) => {
+            const angle = (i * 30 * Math.PI) / 180;
+            const r1 = R_HIP_ARC + 8, r2 = R_HIP_ARC + 14;
+            return (
+              <line
+                key={i}
+                x1={CX + r1 * Math.cos(angle)} y1={CY + r1 * Math.sin(angle)}
+                x2={CX + r2 * Math.cos(angle)} y2={CY + r2 * Math.sin(angle)}
+                stroke="#2A3240" strokeWidth={1}
+              />
+            );
+          })}
+
+          {/* Center dot */}
+          <circle cx={CX} cy={CY} r={3} fill="#2A3240" />
+          <circle cx={CX} cy={CY} r={1.5} fill="#4A5568" />
+
+          {/* Hip arc — red/coral */}
+          {Math.abs(hipDelta) > 0.5 && (
+            <path
+              d={arcPath(CX, CY, R_HIP_ARC, hipStartAngle, hipEndAngle)}
+              fill="none"
+              stroke="#FF3B3B"
+              strokeWidth={6}
+              strokeLinecap="round"
+              opacity={0.9}
+            />
+          )}
+
+          {/* Shoulder arc — blue */}
+          {Math.abs(shoulderDelta) > 0.5 && (
+            <path
+              d={arcPath(CX, CY, R_SHOULDER_ARC, shoulderStartAngle, shoulderEndAngle)}
+              fill="none"
+              stroke="#4A90D9"
+              strokeWidth={6}
+              strokeLinecap="round"
+              opacity={0.9}
+            />
+          )}
+
+          {/* Contact frame ring */}
+          {currentFrame >= contactFrame && (
+            <>
+              <circle
+                cx={CX} cy={CY} r={R_HIP_ARC + 4}
+                fill="none"
+                stroke="#FFD700"
+                strokeWidth={1.5}
+                strokeDasharray="4 4"
+                opacity={0.6}
+              />
+              <text x={CX} y={18} textAnchor="middle" fill="#FFD700" fontSize={9} fontFamily="DM Mono, monospace" opacity={0.8}>
+                CONTACT
+              </text>
+            </>
+          )}
+
+          {/* Legend */}
+          <rect x={8} y={212} width={8} height={8} rx={2} fill="#FF3B3B" opacity={0.9} />
+          <text x={20} y={220} fill="#6B7A8D" fontSize={9} fontFamily="Barlow Condensed, sans-serif" letterSpacing="0.5">HIPS</text>
+          <rect x={58} y={212} width={8} height={8} rx={2} fill="#4A90D9" opacity={0.9} />
+          <text x={70} y={220} fill="#6B7A8D" fontSize={9} fontFamily="Barlow Condensed, sans-serif" letterSpacing="0.5">SHOULDERS</text>
+        </svg>
+      )}
+
+      <div className="text-center space-y-1">
         <p className="text-sm font-semibold" style={{ color: separationColor, fontFamily: "Barlow Condensed, sans-serif", letterSpacing: "0.5px" }}>
           {separationLabel}
         </p>
         <p className="text-xs text-[var(--color-text-dim)]" style={{ fontFamily: "DM Mono, monospace" }}>
-          TOP-DOWN YAW · FRAME {currentFrame + 1}/{frames.length}
+          TOP-DOWN VIEW · FRAME {currentFrame + 1}/{frames.length}
         </p>
       </div>
     </div>

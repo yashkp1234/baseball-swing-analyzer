@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "react-router-dom";
-import { getJobStatus, getJobResults, artifactUrl, type SportProfile, type SwingMetrics } from "@/lib/api";
+import { getJobStatus, getJobResults, artifactUrl, type SwingMetrics } from "@/lib/api";
 import { Card, CardTitle } from "@/components/Card";
 import { MetricCard } from "@/components/MetricCard";
 import { PhaseTimeline } from "@/components/PhaseTimeline";
@@ -21,20 +21,6 @@ const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
   { key: "head_displacement_total", label: "Head Displace" },
   { key: "wrist_peak_velocity_normalized", label: "Peak Wrist Vel (norm)" },
 ];
-
-function sportLabel(profile: SportProfile | null | undefined): string {
-  if (!profile) return "Not confidently detected";
-  if (profile.label === "baseball") return "Baseball";
-  if (profile.label === "softball") return "Softball";
-  return "Not confidently detected";
-}
-
-function sportNote(profile: SportProfile | null | undefined): string {
-  if (!profile || profile.label === "unknown") {
-    return "Using shared hitting guidance because the clip did not contain a strong baseball or softball signal.";
-  }
-  return `Using ${profile.label}-aware interpretation where wording and thresholds differ.`;
-}
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -82,7 +68,6 @@ export function ResultsPage() {
   if (!m) return <div className="min-h-screen flex items-center justify-center">Loading…</div>;
 
   const videoSrc = artifactUrl(jobId, "annotated.mp4");
-  const sportProfile = resultsQuery.data?.sport_profile;
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)]">
@@ -96,23 +81,6 @@ export function ResultsPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         <AnalysisSummary analysis={resultsQuery.data?.analysis} />
-
-        <Card>
-          <CardTitle>Detected Sport</CardTitle>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-lg font-semibold">{sportLabel(sportProfile)}</p>
-              <p className="mt-1 text-sm text-[var(--color-text-dim)]">{sportNote(sportProfile)}</p>
-            </div>
-            {sportProfile ? (
-              <div className="text-right text-xs text-[var(--color-text-dim)]">
-                <div>Confidence {(sportProfile.confidence * 100).toFixed(0)}%</div>
-                <div>Context {(sportProfile.context_confidence * 100).toFixed(0)}%</div>
-                <div>Mechanics {(sportProfile.mechanics_confidence * 100).toFixed(0)}%</div>
-              </div>
-            ) : null}
-          </div>
-        </Card>
 
         <Card>
           <CardTitle>Phase Timeline</CardTitle>

@@ -16,14 +16,6 @@ export interface AnalysisSummary {
   pose_inference_duration_ms?: number;
 }
 
-export interface SportProfile {
-  label: "baseball" | "softball" | "unknown";
-  confidence: number;
-  context_confidence: number;
-  mechanics_confidence: number;
-  reasons: string[];
-}
-
 export interface SwingMetrics {
   phase_durations: Record<string, number>;
   stride_plant_frame: number | null;
@@ -79,28 +71,9 @@ export interface Swing3DData {
   frames: Frame3D[];
   kinetic_chain_scores: { hip_to_shoulder: number; shoulder_to_hand: number; overall: number };
   energy_loss_events: EnergyLossEvent[];
-  metrics: Record<string, unknown>;
+  metrics: Record<string, number | string>;
   skeleton: [number, number][];
   keypoint_names: string[];
-}
-
-export interface ProjectionSummary {
-  estimate_basis: string;
-  exit_velocity_mph: number;
-  exit_velocity_mph_low: number;
-  exit_velocity_mph_high: number;
-  carry_distance_ft: number;
-  carry_distance_ft_low: number;
-  carry_distance_ft_high: number;
-  score: number;
-  notes?: string[];
-}
-
-export interface ProjectionResponse {
-  baseline: ProjectionSummary;
-  projection: ProjectionSummary;
-  viewer: Swing3DData;
-  sport_profile: SportProfile | null;
 }
 
 export interface JobStatus {
@@ -119,7 +92,6 @@ export interface JobResults {
   status: "completed" | "failed";
   metrics: SwingMetrics | null;
   analysis: AnalysisSummary | null;
-  sport_profile: SportProfile | null;
   coaching: CoachingLine[] | null;
   frames_3d_url: string;
 }
@@ -147,19 +119,6 @@ export async function getJobResults(jobId: string): Promise<JobResults> {
 export async function getFrames3D(jobId: string): Promise<Swing3DData> {
   const res = await fetch(`${API_BASE}/${jobId}/artifacts/frames_3d.json`);
   if (!res.ok) throw new Error(`3D data failed: ${res.statusText}`);
-  return res.json();
-}
-
-export async function projectSwing(
-  jobId: string,
-  payload: { x_factor_delta_deg: number; head_stability_delta_norm: number },
-): Promise<ProjectionResponse> {
-  const res = await fetch(`${API_BASE}/${jobId}/projection`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) throw new Error(`Projection failed: ${res.statusText}`);
   return res.json();
 }
 

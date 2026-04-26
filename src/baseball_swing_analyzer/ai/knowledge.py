@@ -34,9 +34,9 @@ RULES: list[tuple[str, MetricRule]] = [
     (
         "left_knee_at_contact",
         lambda v: None if 10 <= v <= 45 else (
-            "Front knee is too straight at contact — you're losing leverage. Maintain slight flexion through contact."
+            "Front knee is too straight at contact — you're losing leverage. Maintain slight flexion through the ball."
             if v < 10 else
-            "Front knee is very bent — you may be collapsing into your move. Push into the ground for a firm front side."
+            "Front knee is very bent — you may be collapsing into the plate. Push into the ground for a firm front side."
         ),
     ),
     (
@@ -50,13 +50,13 @@ RULES: list[tuple[str, MetricRule]] = [
     (
         "head_displacement_total",
         lambda v: None if v <= 60 else (
-            "Head is moving a lot during the swing — stay centered from load to contact."
+            "Head is moving a lot during the swing — stay centered over the plate from load to contact."
         ),
     ),
     (
         "lateral_spine_tilt_at_contact",
         lambda v: None if -15 <= v <= 15 else (
-            "You may be leaning away at contact — stay stacked and drive through the middle."
+            "You may be leaning away from the plate at contact — stay stacked and drive through the middle of the ball."
         ),
     ),
 ]
@@ -115,7 +115,7 @@ def generate_static_report(metrics: dict) -> list[str]:
         # Finish height tip
         finish = flags.get("finish_height")
         if finish == "low":
-            cues.append("Low finish detected — stay through contact longer and extend through the middle of the field.")
+            cues.append("Low finish detected — stay through the ball longer and extend your arms toward the pitcher.")
 
     if not cues:
         cues.append("Swing mechanics look solid. Keep working on consistency and timing.")

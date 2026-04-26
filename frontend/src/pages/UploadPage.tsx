@@ -28,7 +28,7 @@ export function UploadPage() {
             Swing<span className="text-[var(--color-accent)]">Metrics</span>
           </h1>
           <p className="mt-2 text-[var(--color-text-dim)]">
-            Upload a baseball or softball swing video for biomechanical analysis
+            Upload a baseball swing video for biomechanical analysis
           </p>
         </div>
         <UploadZone onFileSelected={handleFile} isUploading={isUploading} />

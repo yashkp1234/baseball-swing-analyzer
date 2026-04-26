@@ -80,10 +80,6 @@ def run_analysis(job_id: str) -> None:
 
         db.update_job(job_id, progress=0.8, current_step="generating_coaching")
 
-        from baseball_swing_analyzer.sport import detect_sport_profile
-
-        result["sport_profile"] = detect_sport_profile(job["original_filename"], result)
-
         from baseball_swing_analyzer.ai.knowledge import generate_static_report
 
         coaching_lines = generate_static_report(result)
