@@ -16,6 +16,7 @@ from .phases import classify_phases
 from .pose import extract_pose, pose_device, smooth_keypoints
 from .reporter import build_report
 from .ai.flags import generate_qualitative_flags
+from .swing_segments import best_swing_segment, detect_swing_segments
 from .visualizer import annotate_frame
 
 
@@ -264,11 +265,22 @@ def analyze_swing(
     keypoints_seq = np.stack(keypoints_list, axis=0)  # (T, 17, 3)
     keypoints_seq = smooth_keypoints(keypoints_seq)
 
-    phase_labels = classify_phases(keypoints_seq, fps=analysis_fps)
-    report = build_report(phase_labels, keypoints_seq, analysis_fps)
+    swing_segments = detect_swing_segments(keypoints_seq, analysis_fps)
+    primary_segment = best_swing_segment(swing_segments)
+    if primary_segment is not None:
+        segment_slice = slice(primary_segment.start_frame, primary_segment.end_frame + 1)
+        keypoints_for_metrics = keypoints_seq[segment_slice]
+    else:
+        segment_slice = slice(0, keypoints_seq.shape[0])
+        keypoints_for_metrics = keypoints_seq
+
+    phase_labels = classify_phases(keypoints_for_metrics, fps=analysis_fps)
+    report = build_report(phase_labels, keypoints_for_metrics, analysis_fps)
     report["flags"] = generate_qualitative_flags(
-        keypoints_seq, phase_labels, handedness=handedness
+        keypoints_for_metrics, phase_labels, handedness=handedness
     )
+    report["swing_segments"] = [segment.to_dict() for segment in swing_segments]
+    report["primary_swing_segment"] = primary_segment.to_dict() if primary_segment else None
     report["analysis"] = {
         "pose_device": pose_device(),
         "source_frames": props.total_frames,
@@ -279,12 +291,14 @@ def analyze_swing(
         "analysis_duration_ms": (time.perf_counter() - analysis_started) * 1000.0,
         "pose_inference_duration_ms": pose_inference_duration_ms,
     }
-    report["_keypoints_seq"] = keypoints_seq
+    report["_keypoints_seq"] = keypoints_for_metrics
 
     if annotate and output_dir is not None and all_frames is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
         out_path = output_dir / "annotated.mp4"
-        _write_annotated_frames(out_path, all_frames, keypoints_seq, bbox_list, phase_labels)
+        segment_frames = all_frames[segment_slice]
+        segment_bboxes = bbox_list[segment_slice]
+        _write_annotated_frames(out_path, segment_frames, keypoints_for_metrics, segment_bboxes, phase_labels)
 
     return report
 
