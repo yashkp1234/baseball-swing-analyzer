@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Box } from "lucide-react";
 import { Card, CardTitle } from "@/components/Card";
@@ -8,7 +8,7 @@ import { ExecutiveSummaryHero } from "@/components/ExecutiveSummaryHero";
 import { ImprovementPlan } from "@/components/ImprovementPlan";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
 import { SwingTakeaways } from "@/components/SwingTakeaways";
-import { VideoPlayer } from "@/components/VideoPlayer";
+import { VideoPlayer, type VideoPlayerHandle } from "@/components/VideoPlayer";
 import { artifactUrl, getJobResults, getJobStatus, type SwingMetrics } from "@/lib/api";
 import { buildExecutiveSummary } from "@/lib/resultsSummary";
 
@@ -26,6 +26,7 @@ const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
   const [currentFrame, setCurrentFrame] = useState(0);
+  const videoRef = useRef<VideoPlayerHandle>(null);
 
   const statusQuery = useQuery({
     queryKey: ["status", jobId],
@@ -68,9 +69,15 @@ export function ResultsPage() {
 
   const metrics = resultsQuery.data?.metrics;
   if (!metrics) return <div className="min-h-screen flex items-center justify-center">Loading...</div>;
+  const resolvedMetrics = metrics;
 
   const videoSrc = artifactUrl(jobId, "annotated.mp4");
-  const executiveSummary = buildExecutiveSummary(metrics, resultsQuery.data?.coaching);
+  const executiveSummary = buildExecutiveSummary(resolvedMetrics, resultsQuery.data?.coaching);
+
+  function handleFrameSelect(frame: number) {
+    setCurrentFrame(frame);
+    videoRef.current?.seekToSeconds(frame / resolvedMetrics.fps);
+  }
 
   return (
     <div className="min-h-screen bg-[var(--color-bg)]">
@@ -98,12 +105,13 @@ export function ResultsPage() {
               <p className="mb-4 max-w-3xl px-1 text-sm leading-6 text-[var(--color-text-dim)]">
                 This is the evidence layer for the report. Use it to confirm the written summary against the actual swing.
               </p>
-              <VideoPlayer
-                src={videoSrc}
-                fps={metrics.fps}
-                selectedFrame={currentFrame}
-                onFrameChange={setCurrentFrame}
-              />
+                <VideoPlayer
+                  ref={videoRef}
+                  src={videoSrc}
+                  fps={resolvedMetrics.fps}
+                  selectedFrame={currentFrame}
+                  onFrameChange={setCurrentFrame}
+                />
 
               <div className="mt-4 space-y-4">
                 <Link
@@ -122,15 +130,15 @@ export function ResultsPage() {
 
         <ImprovementPlan
           nextSteps={executiveSummary.nextSteps}
-          flags={metrics.flags}
+          flags={resolvedMetrics.flags}
         />
 
         <DetailsDiagnostics
           analysis={resultsQuery.data?.analysis}
-          metrics={metrics}
+          metrics={resolvedMetrics}
           metricDefinitions={DISPLAY_METRICS}
           currentFrame={currentFrame}
-          onFrameSelect={setCurrentFrame}
+          onFrameSelect={handleFrameSelect}
         />
       </main>
     </div>

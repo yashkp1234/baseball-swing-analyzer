@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { forwardRef, useEffect, useImperativeHandle, useRef } from "react";
 
 interface VideoPlayerProps {
   src: string;
@@ -8,15 +8,30 @@ interface VideoPlayerProps {
   className?: string;
 }
 
+export interface VideoPlayerHandle {
+  seekToSeconds: (seconds: number) => void;
+}
+
 function frameToTime(frame: number, fps: number): number {
   if (fps <= 0) return 0;
   return Math.max(frame, 0) / fps;
 }
 
-export function VideoPlayer({ src, fps, selectedFrame, onFrameChange, className }: VideoPlayerProps) {
+export const VideoPlayer = forwardRef<VideoPlayerHandle, VideoPlayerProps>(function VideoPlayer(
+  { src, fps, selectedFrame, onFrameChange, className },
+  ref,
+) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastAppliedFrameRef = useRef<number | null>(null);
   const lastReportedFrameRef = useRef<number | null>(null);
+
+  useImperativeHandle(ref, () => ({
+    seekToSeconds(seconds: number) {
+      const video = videoRef.current;
+      if (!video || !Number.isFinite(seconds)) return;
+      video.currentTime = Math.max(0, seconds);
+    },
+  }));
 
   useEffect(() => {
     const video = videoRef.current;
@@ -59,4 +74,4 @@ export function VideoPlayer({ src, fps, selectedFrame, onFrameChange, className 
       style={{ maxHeight: "480px" }}
     />
   );
-}
+});

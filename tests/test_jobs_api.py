@@ -1,10 +1,12 @@
-"""Tests for job status and progress telemetry."""
+"""Tests for job status, progress telemetry, and artifact serving."""
 
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
+from fastapi import Request
 
+from server.api.artifacts import build_artifact_response
 from server.api.results import get_results
 from server.api.status import get_status
 from server.tasks.analyze import run_analysis
@@ -88,3 +90,29 @@ async def test_results_endpoint_returns_analysis_summary() -> None:
     assert body["analysis"]["pose_device"] == "cuda"
     assert body["analysis"]["sampled_frames"] == 72
     assert "analysis" not in body["metrics"]
+
+
+@pytest.mark.asyncio
+async def test_artifact_response_honors_byte_range_requests(tmp_path: Path) -> None:
+    artifact_path = tmp_path / "annotated.mp4"
+    artifact_path.write_bytes(b"0123456789")
+    request = Request(
+        {
+            "type": "http",
+            "method": "GET",
+            "path": "/api/jobs/job-123/artifacts/annotated.mp4",
+            "headers": [(b"range", b"bytes=2-5")],
+        }
+    )
+
+    response = await build_artifact_response(
+        request=request,
+        file_path=artifact_path,
+        media_type="video/mp4",
+        filename="annotated.mp4",
+    )
+
+    assert response.status_code == 206
+    assert response.headers["accept-ranges"] == "bytes"
+    assert response.headers["content-range"] == "bytes 2-5/10"
+    assert response.headers["content-length"] == "4"
