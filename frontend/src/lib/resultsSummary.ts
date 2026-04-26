@@ -132,7 +132,7 @@ function buildSummary(label: string, score: number, strengths: string[], nextSte
         ? "This swing has a solid foundation with room to sharpen."
         : "This swing needs cleaner movement before the power can play consistently.";
 
-  return [opener, strengths[0], nextSteps[0] ? `Next priority: ${nextSteps[0].text}` : null].filter(Boolean).join(" ");
+  return [opener, strengths[0], nextSteps[0]?.text].filter(Boolean).join(" ");
 }
 
 export function buildExecutiveSummary(

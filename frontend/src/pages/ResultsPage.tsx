@@ -9,7 +9,7 @@ import { ImprovementPlan } from "@/components/ImprovementPlan";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
 import { SwingTakeaways } from "@/components/SwingTakeaways";
 import { VideoPlayer, type VideoPlayerHandle } from "@/components/VideoPlayer";
-import { artifactUrl, getJobResults, getJobStatus, type SportProfile, type SwingMetrics } from "@/lib/api";
+import { artifactUrl, getJobResults, getJobStatus, type SwingMetrics } from "@/lib/api";
 import { buildExecutiveSummary } from "@/lib/resultsSummary";
 
 const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
@@ -22,20 +22,6 @@ const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
   { key: "head_displacement_total", label: "Head Displace" },
   { key: "wrist_peak_velocity_normalized", label: "Peak Wrist Vel (norm)" },
 ];
-
-function sportLabel(profile: SportProfile | null | undefined): string {
-  if (!profile) return "Not confidently detected";
-  if (profile.label === "baseball") return "Baseball";
-  if (profile.label === "softball") return "Softball";
-  return "Not confidently detected";
-}
-
-function sportNote(profile: SportProfile | null | undefined): string {
-  if (!profile || profile.label === "unknown") {
-    return "Using shared hitting guidance because the clip did not contain a strong baseball or softball signal.";
-  }
-  return `Using ${profile.label}-aware interpretation where wording and thresholds differ.`;
-}
 
 export function ResultsPage() {
   const { jobId } = useParams<{ jobId: string }>();
@@ -86,7 +72,6 @@ export function ResultsPage() {
   const resolvedMetrics = metrics;
 
   const videoSrc = artifactUrl(jobId, "annotated.mp4");
-  const sportProfile = resultsQuery.data?.sport_profile;
   const executiveSummary = buildExecutiveSummary(resolvedMetrics, resultsQuery.data?.coaching);
 
   function handleFrameSelect(frame: number) {
@@ -118,7 +103,7 @@ export function ResultsPage() {
             <div className="border-t border-white/8 bg-[rgba(7,10,16,0.34)] p-4 lg:p-5 xl:border-l xl:border-t-0">
               <CardTitle className="mb-2 px-1">Annotated Video</CardTitle>
               <p className="mb-4 max-w-3xl px-1 text-sm leading-6 text-[var(--color-text-dim)]">
-                This is the evidence layer for the report. Use it to confirm the written summary against the actual swing.
+                Review the swing clip next to the coaching summary.
               </p>
               <VideoPlayer
                 ref={videoRef}
@@ -134,29 +119,12 @@ export function ResultsPage() {
                   className="flex items-center justify-center gap-2 rounded-[20px] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-6 py-4 text-sm font-semibold text-[var(--color-accent)] transition hover:bg-[var(--color-accent)]/18"
                 >
                   <Box className="h-5 w-5" />
-                  Launch 3D Swing Viewer
+                  Open Swing Breakdown
                 </Link>
               </div>
             </div>
           </div>
         </section>
-
-        <Card>
-          <CardTitle>Detected Sport</CardTitle>
-          <div className="flex items-center justify-between gap-4">
-            <div>
-              <p className="text-lg font-semibold">{sportLabel(sportProfile)}</p>
-              <p className="mt-1 text-sm text-[var(--color-text-dim)]">{sportNote(sportProfile)}</p>
-            </div>
-            {sportProfile ? (
-              <div className="text-right text-xs text-[var(--color-text-dim)]">
-                <div>Confidence {(sportProfile.confidence * 100).toFixed(0)}%</div>
-                <div>Context {(sportProfile.context_confidence * 100).toFixed(0)}%</div>
-                <div>Mechanics {(sportProfile.mechanics_confidence * 100).toFixed(0)}%</div>
-              </div>
-            ) : null}
-          </div>
-        </Card>
 
         <SwingTakeaways strengths={executiveSummary.strengths} issues={executiveSummary.issues} />
 

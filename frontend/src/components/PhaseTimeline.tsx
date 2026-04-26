@@ -1,4 +1,4 @@
-import { PHASE_COLORS } from "@/lib/metrics";
+import { PHASE_COLORS, PHASE_LABELS } from "@/lib/metrics";
 
 interface PhaseTimelineProps {
   phaseLabels: string[];
@@ -99,8 +99,9 @@ export function PhaseTimeline({
   const selectedSegment = segments.find(
     (segment) => selectedFrame >= segment.start && selectedFrame < segment.start + segment.width,
   );
+  const selectedPhaseLabel = selectedSegment ? PHASE_LABELS[selectedSegment.phase] ?? selectedSegment.phase.replaceAll("_", " ") : "";
   const helperText = selectedSegment
-    ? `${selectedSegment.phase}: ${PHASE_EXPLANATIONS[selectedSegment.phase] ?? "Phase guidance unavailable."}`
+    ? `${selectedPhaseLabel}: ${PHASE_EXPLANATIONS[selectedSegment.phase] ?? "Phase guidance unavailable."}`
     : "Select a phase to jump the annotated video.";
   const markers = [
     stridePlantFrame !== null && stridePlantFrame !== undefined
@@ -135,12 +136,13 @@ export function PhaseTimeline({
           {segments.map((segment, index) => {
             const isSelected = selectedFrame >= segment.start && selectedFrame < segment.start + segment.width;
             const explanation = PHASE_EXPLANATIONS[segment.phase] ?? "Phase guidance unavailable.";
+            const phaseLabel = PHASE_LABELS[segment.phase] ?? segment.phase.replaceAll("_", " ");
 
             return (
               <button
                 key={`${segment.phase}-${index}`}
                 type="button"
-                className={`group relative flex h-full items-center justify-center px-2 text-xs font-medium transition focus:outline-none focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/90 ${
+                className={`group relative flex h-full items-center justify-center px-1 text-[11px] font-semibold transition focus:outline-none focus-visible:z-30 focus-visible:ring-2 focus-visible:ring-white/90 sm:px-2 sm:text-xs ${
                   isSelected ? "z-10 shadow-[inset_0_0_0_2px_rgba(255,255,255,0.9)]" : "hover:opacity-90"
                 }`}
                 style={{
@@ -148,13 +150,13 @@ export function PhaseTimeline({
                   backgroundColor: PHASE_COLORS[segment.phase] || "#555555",
                 }}
                 onClick={() => onFrameSelect?.(segment.start)}
-                aria-label={`${segment.phase}: ${explanation} Frames ${segment.start} to ${segment.start + segment.width - 1}.`}
+                aria-label={`${phaseLabel}: ${explanation} Frames ${segment.start} to ${segment.start + segment.width - 1}.`}
                 aria-pressed={isSelected}
-                title={`${segment.phase}: ${explanation}`}
+                title={`${phaseLabel}: ${explanation}`}
               >
                 {segment.width / total > 0.08 && (
-                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-black/80">
-                    {segment.phase}
+                  <span className="pointer-events-none absolute inset-0 flex items-center justify-center px-1 text-center leading-tight text-black/80">
+                    {phaseLabel}
                   </span>
                 )}
                 <span className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-44 -translate-x-1/2 rounded-lg border border-white/10 bg-[var(--color-surface)] px-3 py-2 text-left text-[11px] leading-4 text-[var(--color-text)] opacity-0 shadow-lg transition group-hover:opacity-100 group-focus-visible:opacity-100">

@@ -1,4 +1,3 @@
-import { Activity, Medal, Radar } from "lucide-react";
 import type { ExecutiveSummaryModel } from "@/lib/resultsSummary";
 
 interface ExecutiveSummaryHeroProps {
@@ -13,67 +12,49 @@ function scoreAccent(score: number): string {
 }
 
 export function ExecutiveSummaryHero({ summary, embedded = false }: ExecutiveSummaryHeroProps) {
+  const primaryStep = summary.nextSteps[0]?.text;
+  const supportingSteps = summary.nextSteps.slice(1, 3);
+
   return (
     <section
       className={
         embedded
           ? "h-full"
-          : "overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(13,18,28,0.98),rgba(22,28,38,0.94))] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
+          : "rounded-2xl border border-white/10 bg-[var(--color-surface)] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.24)]"
       }
     >
-      <div className="border-b border-white/8 px-6 py-4 lg:px-8">
-        <div className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/4 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-[var(--color-text-dim)]">
-          <Radar className="h-3.5 w-3.5" />
-          Executive Summary
+      <div className={embedded ? "grid h-full gap-6 px-6 py-6 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center lg:px-8 lg:py-8" : "grid gap-5 lg:grid-cols-[180px_minmax(0,1fr)] lg:items-center"}>
+        <div>
+          <p className={`text-6xl font-semibold leading-none lg:text-7xl ${scoreAccent(summary.score)}`}>
+            {summary.score}
+          </p>
+          <p className="mt-2 text-xl font-semibold text-[var(--color-text)]">{summary.label}</p>
         </div>
-      </div>
 
-      <div className="grid gap-6 px-6 py-6 lg:grid-cols-[minmax(0,1.3fr)_minmax(280px,0.7fr)] lg:px-8 lg:py-8">
-        <div className="space-y-5">
-          <div className="flex flex-wrap items-end gap-4">
-            <div>
-              <p className={`text-6xl font-semibold leading-none lg:text-7xl ${scoreAccent(summary.score)}`}>
-                {summary.score}
-              </p>
-              <p className="mt-3 text-lg font-semibold text-[var(--color-text)] lg:text-2xl">
-                {summary.label}
-              </p>
-            </div>
-            <div className="max-w-xs rounded-2xl border border-white/8 bg-white/4 px-4 py-3">
-              <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[var(--color-text-dim)]">
-                <Medal className="h-3.5 w-3.5" />
-                Score Signal
-              </div>
-              <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">
-                Built from rotation, posture, lower-half leverage, stability, and hand-speed signals already returned by the analysis API.
-              </p>
-            </div>
-          </div>
-
-          <p className="max-w-3xl text-sm leading-7 text-[var(--color-text-dim)] lg:text-base">
+        <div className="space-y-4">
+          <p className="max-w-3xl text-base leading-7 text-[var(--color-text)]">
             {summary.summary}
           </p>
-        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
-          <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
-            <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.16em] text-[var(--color-text-dim)]">
-              <Activity className="h-3.5 w-3.5" />
-              Evidence Layer
+          {primaryStep ? (
+            <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-4">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-dim)]">
+                Work on this first
+              </p>
+              <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">{primaryStep}</p>
             </div>
-            <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">
-              The annotated video below is the proof surface for this summary, so the report stays tied to the actual move.
-            </p>
-          </div>
-          <div className="rounded-2xl border border-white/8 bg-white/4 p-4">
-            <div className="text-[11px] uppercase tracking-[0.16em] text-[var(--color-text-dim)]">
-              Immediate Read
+          ) : null}
+
+          {supportingSteps.length > 0 ? (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {supportingSteps.map((step) => (
+                <p key={step.text} className="rounded-lg border border-white/8 bg-white/4 px-3 py-2 text-sm leading-6 text-[var(--color-text-dim)]">
+                  {step.text}
+                </p>
+              ))}
             </div>
-            <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">
-              Start with the score and one-line verdict, then verify it against the swing before digging into the deeper diagnostics.
-            </p>
+          ) : null}
           </div>
-        </div>
       </div>
     </section>
   );

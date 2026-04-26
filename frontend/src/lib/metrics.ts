@@ -25,6 +25,17 @@ export const PHASE_COLORS: Record<string, string> = {
   follow_through: "#FF8A00",
 };
 
+export const PHASE_LABELS: Record<string, string> = {
+  idle: "Before Swing",
+  stance: "Set Up",
+  load: "Load",
+  launch: "Launch",
+  stride: "Stride",
+  swing: "Turn",
+  contact: "Contact",
+  follow_through: "Finish",
+};
+
 export function metricZone(key: string, value: number): "good" | "moderate" | "poor" {
   const range = METRIC_RANGES[key];
   if (!range) return "moderate";

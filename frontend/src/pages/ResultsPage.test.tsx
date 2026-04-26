@@ -85,8 +85,9 @@ describe("ResultsPage", () => {
     );
 
     expect(html).toContain('aria-label="Executive summary and annotated video"');
-    expect(html).toContain("Executive Summary");
+    expect(html).toContain("Promising swing");
     expect(html).toContain("Annotated Video");
+    expect(html).not.toMatch(/Detected Sport|Context|Mechanics|not confidently detected/i);
   });
 
   test("keeps the story sections primary and moves diagnostics into a secondary details band", () => {

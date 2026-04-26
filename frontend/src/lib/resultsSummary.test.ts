@@ -79,4 +79,14 @@ describe("buildExecutiveSummary", () => {
       text: "hips leak early, which can flatten the sequence before the barrel turns loose",
     });
   });
+
+  test("keeps the summary player-facing and free of internal report wording", () => {
+    const summary = buildExecutiveSummary(makeMetrics(), [
+      { tone: "warn", text: "Foot plant is early. Try a softer, controlled toe-tap load." },
+    ]);
+
+    expect(summary.summary).toContain("Foot plant is early");
+    expect(summary.summary).not.toMatch(/signal|evidence|diagnostic|proof surface/i);
+    expect(summary.nextSteps[0].text).toContain("Foot plant is early");
+  });
 });
