@@ -1,4 +1,4 @@
-import { PHASE_COLORS, type MetricRange } from "@/lib/metrics";
+import { PHASE_COLORS } from "@/lib/metrics";
 
 interface PhaseTimelineProps {
   phaseLabels: string[];

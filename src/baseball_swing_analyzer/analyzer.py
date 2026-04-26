@@ -1,6 +1,10 @@
 """Main analyzer pipeline: video → pose → metrics."""
 
+from collections.abc import Callable
+import os
 from pathlib import Path
+import subprocess
+import time
 
 import cv2
 import numpy as np
@@ -9,22 +13,168 @@ from numpy.typing import NDArray
 from .detection import detect_person, reset_tracker
 from .ingestion import get_video_properties, load_video
 from .phases import classify_phases
-from .pose import extract_pose, smooth_keypoints
+from .pose import extract_pose, pose_device, smooth_keypoints
 from .reporter import build_report
 from .ai.flags import generate_qualitative_flags
 from .visualizer import annotate_frame
 
 
-# Target frame rate for analysis. Source at 30fps is downsampled to ~15fps (stride=2).
-_TARGET_ANALYSIS_FPS = 15.0
+_CPU_TARGET_ANALYSIS_FPS = float(os.environ.get("SWING_ANALYSIS_TARGET_FPS_CPU", "8"))
+_GPU_TARGET_ANALYSIS_FPS = float(os.environ.get("SWING_ANALYSIS_TARGET_FPS_GPU", "30"))
+_CPU_MAX_ANALYSIS_FRAMES = int(os.environ.get("SWING_ANALYSIS_MAX_FRAMES_CPU", "6"))
+_GPU_MAX_ANALYSIS_FRAMES = int(os.environ.get("SWING_ANALYSIS_MAX_FRAMES_GPU", "120"))
 
 
-def _subsample_indices(total_frames: int, source_fps: float, target_fps: float = _TARGET_ANALYSIS_FPS) -> list[int]:
+def _analysis_budget() -> tuple[float, int]:
+    if pose_device() == "cuda":
+        return _GPU_TARGET_ANALYSIS_FPS, _GPU_MAX_ANALYSIS_FRAMES
+    return _CPU_TARGET_ANALYSIS_FPS, _CPU_MAX_ANALYSIS_FRAMES
+
+
+def _subsample_indices(
+    total_frames: int,
+    source_fps: float,
+    target_fps: float,
+    max_frames: int,
+) -> list[int]:
     """Return frame indices to process so the effective rate is ~*target_fps*."""
     if source_fps <= target_fps:
+        indices = list(range(total_frames))
+    else:
+        step = max(1, round(source_fps / target_fps))
+        indices = list(range(0, total_frames, step))
+
+    if len(indices) > max_frames:
+        indices = np.linspace(0, total_frames - 1, max_frames, dtype=int).tolist()
+    return indices
+
+
+def _motion_window(motion_scores: NDArray[np.floating]) -> tuple[int, int] | None:
+    scores = np.asarray(motion_scores, dtype=float).flatten()
+    if scores.size < 5 or float(scores.max()) <= 0:
+        return None
+
+    peak = float(scores.max())
+    mean = float(scores.mean())
+    std = float(scores.std())
+    if peak <= mean + std:
+        return None
+
+    threshold = max(peak * 0.35, mean + std * 0.8)
+    active = scores >= threshold
+    if not np.any(active):
+        return None
+
+    peak_idx = int(np.argmax(scores))
+    start = peak_idx
+    end = peak_idx
+    while start > 0 and active[start - 1]:
+        start -= 1
+    while end < len(scores) - 1 and active[end + 1]:
+        end += 1
+
+    return start, end
+
+
+def _adaptive_sample_indices(
+    total_frames: int,
+    source_fps: float,
+    target_fps: float,
+    max_frames: int,
+    motion_scores: NDArray[np.floating] | None,
+) -> list[int]:
+    uniform = _subsample_indices(total_frames, source_fps, target_fps, max_frames)
+    if motion_scores is None:
+        return uniform
+
+    window = _motion_window(motion_scores)
+    if window is None:
+        return uniform
+
+    start, end = window
+    if end <= start:
+        return uniform
+
+    if total_frames <= max_frames:
         return list(range(total_frames))
-    step = max(1, round(source_fps / target_fps))
-    return list(range(0, total_frames, step))
+
+    focus_frames = min(max_frames - 8, max(40, int(max_frames * 0.65)))
+    context_frames = max_frames - focus_frames
+
+    inside = np.linspace(start, end, focus_frames, dtype=int).tolist()
+    pre_count = context_frames // 2
+    post_count = context_frames - pre_count
+    outside: list[int] = []
+    if start > 0 and pre_count > 0:
+        outside.extend(np.linspace(0, start - 1, pre_count, dtype=int).tolist())
+    if end < total_frames - 1 and post_count > 0:
+        outside.extend(np.linspace(end + 1, total_frames - 1, post_count, dtype=int).tolist())
+
+    indices = sorted(set([*inside, *outside]))
+    if len(indices) < max_frames:
+        for idx in uniform:
+            if idx not in indices:
+                indices.append(idx)
+            if len(indices) == max_frames:
+                break
+        indices.sort()
+
+    return indices[:max_frames]
+
+
+def _compute_motion_scores(video_path: Path, total_frames: int) -> NDArray[np.float32]:
+    cap = cv2.VideoCapture(str(video_path))
+    scores = np.zeros(total_frames, dtype=np.float32)
+    prev_small: NDArray[np.uint8] | None = None
+    idx = 0
+    try:
+        while cap.isOpened() and idx < total_frames:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            small = cv2.resize(gray, (96, 54), interpolation=cv2.INTER_AREA)
+            if prev_small is not None:
+                scores[idx] = float(np.mean(cv2.absdiff(small, prev_small)))
+            prev_small = small
+            idx += 1
+    finally:
+        cap.release()
+    return scores
+
+
+def _effective_fps(indices: list[int], source_fps: float) -> float:
+    """Return the approximate FPS of the sampled analysis sequence."""
+    if len(indices) < 2:
+        return source_fps
+    sampled_duration = (indices[-1] - indices[0] + 1) / source_fps
+    return len(indices) / sampled_duration if sampled_duration > 0 else source_fps
+
+
+def _transcode_video_for_browser(src_path: Path, dst_path: Path) -> None:
+    import imageio_ffmpeg
+
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    subprocess.run(
+        [
+            ffmpeg_exe,
+            "-y",
+            "-i",
+            str(src_path),
+            "-movflags",
+            "+faststart",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            str(dst_path),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 def analyze_swing(
@@ -32,7 +182,8 @@ def analyze_swing(
     output_dir: Path | None = None,
     annotate: bool = False,
     handedness: str = "auto",
-    tracker: str | None = "bytetrack.yaml",
+    tracker: str | None = None,
+    progress_callback: Callable[[int, int], None] | None = None,
 ) -> dict:
     """Run the full pipeline on a video file.
 
@@ -50,17 +201,33 @@ def analyze_swing(
         YOLO tracker config (e.g. ``"bytetrack.yaml"``). Pass ``None`` for
         per-frame detection without tracking.
     """
-    reset_tracker()
+    analysis_started = time.perf_counter()
+    if tracker is not None:
+        reset_tracker()
     props = get_video_properties(video_path)
-
-    indices = _subsample_indices(props.total_frames, props.fps)
-    print(f"[Analyzer] Source: {props.total_frames} frames @ {props.fps:.1f} fps -> processing {len(indices)} frames")
+    target_fps, max_frames = _analysis_budget()
+    motion_scores = _compute_motion_scores(video_path, props.total_frames)
+    indices = _adaptive_sample_indices(
+        props.total_frames,
+        props.fps,
+        target_fps,
+        max_frames,
+        motion_scores,
+    )
+    analysis_fps = _effective_fps(indices, props.fps)
+    sampling_mode = "adaptive" if indices != _subsample_indices(props.total_frames, props.fps, target_fps, max_frames) else "uniform"
+    print(
+        f"[Analyzer] Source: {props.total_frames} frames @ {props.fps:.1f} fps "
+        f"-> processing {len(indices)} frames on {pose_device()} "
+        f"(target_fps={target_fps:.1f}, max_frames={max_frames}, mode={sampling_mode})"
+    )
 
     keypoints_list: list[NDArray[np.floating]] = []
     bbox_list: list[tuple[int, int, int, int] | None] = []
     all_frames: list[np.ndarray] | None = [] if annotate else None
 
     cap = cv2.VideoCapture(str(video_path))
+    pose_started = time.perf_counter()
     try:
         frame_idx = 0
         processed_idx = 0
@@ -73,7 +240,7 @@ def analyze_swing(
                 break
 
             if frame_idx == indices[processed_idx]:
-                bbox = detect_person(frame, tracker=tracker)
+                bbox = detect_person(frame, tracker=tracker) if tracker is not None else None
                 if bbox is not None:
                     kp = extract_pose(frame, bbox)
                 else:
@@ -82,11 +249,14 @@ def analyze_swing(
                 bbox_list.append(bbox)
                 if all_frames is not None:
                     all_frames.append(frame)
+                if progress_callback is not None:
+                    progress_callback(processed_idx + 1, len(indices))
                 processed_idx += 1
 
             frame_idx += 1
     finally:
         cap.release()
+    pose_inference_duration_ms = (time.perf_counter() - pose_started) * 1000.0
 
     if not keypoints_list:
         raise RuntimeError("No frames were processed.")
@@ -94,11 +264,22 @@ def analyze_swing(
     keypoints_seq = np.stack(keypoints_list, axis=0)  # (T, 17, 3)
     keypoints_seq = smooth_keypoints(keypoints_seq)
 
-    phase_labels = classify_phases(keypoints_seq, fps=min(props.fps, _TARGET_ANALYSIS_FPS))
-    report = build_report(phase_labels, keypoints_seq, props.fps)
+    phase_labels = classify_phases(keypoints_seq, fps=analysis_fps)
+    report = build_report(phase_labels, keypoints_seq, analysis_fps)
     report["flags"] = generate_qualitative_flags(
         keypoints_seq, phase_labels, handedness=handedness
     )
+    report["analysis"] = {
+        "pose_device": pose_device(),
+        "source_frames": props.total_frames,
+        "source_fps": props.fps,
+        "sampled_frames": len(indices),
+        "effective_analysis_fps": analysis_fps,
+        "sampling_mode": sampling_mode,
+        "analysis_duration_ms": (time.perf_counter() - analysis_started) * 1000.0,
+        "pose_inference_duration_ms": pose_inference_duration_ms,
+    }
+    report["_keypoints_seq"] = keypoints_seq
 
     if annotate and output_dir is not None and all_frames is not None:
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -119,8 +300,9 @@ def _write_annotated_frames(
     if not frames:
         return
     h, w = frames[0].shape[:2]
+    raw_path = dst_path.with_suffix(".raw.mp4")
     writer = cv2.VideoWriter(
-        str(dst_path),
+        str(raw_path),
         cv2.VideoWriter_fourcc(*"mp4v"),
         30.0,
         (w, h),
@@ -137,3 +319,5 @@ def _write_annotated_frames(
             writer.write(out)
     finally:
         writer.release()
+    _transcode_video_for_browser(raw_path, dst_path)
+    raw_path.unlink(missing_ok=True)

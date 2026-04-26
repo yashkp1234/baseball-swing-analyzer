@@ -2,6 +2,7 @@
 
 import json
 import sqlite3
+import threading
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -19,30 +20,55 @@ CREATE TABLE IF NOT EXISTS jobs (
     status TEXT NOT NULL DEFAULT 'queued',
     progress REAL NOT NULL DEFAULT 0.0,
     current_step TEXT,
+    progress_detail_current INTEGER,
+    progress_detail_total INTEGER,
+    progress_detail_label TEXT,
     metrics_json TEXT,
-    coaching_html TEXT,
-    frames_3d_json TEXT,
     error_message TEXT,
     created_at TEXT NOT NULL,
     completed_at TEXT
 );
 """
 
+_MIGRATIONS: dict[str, str] = {
+    "progress_detail_current": "ALTER TABLE jobs ADD COLUMN progress_detail_current INTEGER",
+    "progress_detail_total": "ALTER TABLE jobs ADD COLUMN progress_detail_total INTEGER",
+    "progress_detail_label": "ALTER TABLE jobs ADD COLUMN progress_detail_label TEXT",
+}
+
 _executor = ThreadPoolExecutor(max_workers=2)
+
+_local = threading.local()
 
 
 def _get_conn() -> sqlite3.Connection:
-    conn = sqlite3.connect(str(DB_PATH))
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL")
+    conn = getattr(_local, "conn", None)
+    if conn is None:
+        conn = sqlite3.connect(str(DB_PATH), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA journal_mode=DELETE")
+        conn.executescript(_SCHEMA)
+        _apply_migrations(conn)
+        conn.commit()
+        _local.conn = conn
     return conn
 
 
 def init_db() -> None:
     conn = _get_conn()
     conn.executescript(_SCHEMA)
+    _apply_migrations(conn)
     conn.commit()
-    conn.close()
+
+
+def _apply_migrations(conn: sqlite3.Connection) -> None:
+    existing = {
+        row["name"]
+        for row in conn.execute("PRAGMA table_info(jobs)").fetchall()
+    }
+    for column, ddl in _MIGRATIONS.items():
+        if column not in existing:
+            conn.execute(ddl)
 
 
 def create_job(original_filename: str, video_path: str, output_dir: str) -> str:
@@ -54,14 +80,12 @@ def create_job(original_filename: str, video_path: str, output_dir: str) -> str:
         (job_id, original_filename, video_path, output_dir, now),
     )
     conn.commit()
-    conn.close()
     return job_id
 
 
 def get_job(job_id: str) -> dict[str, Any] | None:
     conn = _get_conn()
     row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
-    conn.close()
     if row is None:
         return None
     return dict(row)
@@ -75,7 +99,6 @@ def update_job(job_id: str, **fields: Any) -> None:
     conn = _get_conn()
     conn.execute(f"UPDATE jobs SET {set_clause} WHERE id = ?", values)
     conn.commit()
-    conn.close()
 
 
 def list_jobs(limit: int = 50) -> list[dict[str, Any]]:
@@ -83,7 +106,6 @@ def list_jobs(limit: int = 50) -> list[dict[str, Any]]:
     rows = conn.execute(
         "SELECT * FROM jobs ORDER BY created_at DESC LIMIT ?", (limit,)
     ).fetchall()
-    conn.close()
     return [dict(r) for r in rows]
 
 

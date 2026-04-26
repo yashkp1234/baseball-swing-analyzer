@@ -69,6 +69,25 @@ def test_build_coaching_prompt():
     assert "swing analysis" in prompt.lower() or "metrics" in prompt.lower()
 
 
+def test_static_report_uses_generic_copy_when_sport_unknown():
+    cues = generate_static_report({
+        "sport_profile": {"label": "unknown"},
+        "flags": {"finish_height": "low"},
+        "pose_confidence_mean": 0.8,
+    })
+
+    assert any("through contact longer" in cue.lower() for cue in cues)
+    assert all("pitcher" not in cue.lower() for cue in cues)
+    assert all("baseball" not in cue.lower() for cue in cues)
+
+
+def test_build_coaching_prompt_is_not_baseball_specific():
+    from baseball_swing_analyzer.ai.coaching import build_coaching_prompt
+
+    prompt = build_coaching_prompt({"sport_profile": {"label": "unknown"}})
+    assert "baseball swing" not in prompt.lower()
+
+
 def test_parse_coaching_text():
     from baseball_swing_analyzer.ai.coaching import parse_coaching_text
 

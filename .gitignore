@@ -43,6 +43,7 @@ data/videos/
 
 # Claude memory
 .claude/
+.worktrees/
 
 # Frontend
 frontend/dist/

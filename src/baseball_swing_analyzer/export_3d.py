@@ -115,6 +115,7 @@ def _build_3d_data(
         "frames": frames_list,
         "kinetic_chain_scores": chain_scores,
         "energy_loss_events": energy_events,
+        "depth_disclaimer": "Depth is estimated from 2D heuristics — quantitative depth metrics are not available. View this as a stylized rendering of the 2D pose.",
         "metrics": {
             k: v for k, v in report.items()
             if k not in ("phase_labels", "_keypoints_seq", "flags") and isinstance(v, (int, float, str, bool))
@@ -162,7 +163,7 @@ def _empty_result(fps: float) -> dict:
         "stride_plant_frame": None,
         "phase_labels": [],
         "frames": [],
-        "kinetic_chain_scores": {"hip_to_shoulder": 0, "shoulder_to_hand": 0, "overall": 0},
+        "kinetic_chain_scores": {"hip_to_shoulder": {"lag_frames": 0, "direction": "synced"}, "shoulder_to_hand": {"lag_frames": 0, "direction": "synced"}},
         "energy_loss_events": [],
         "metrics": {},
         "skeleton": COCO_SKELETON,

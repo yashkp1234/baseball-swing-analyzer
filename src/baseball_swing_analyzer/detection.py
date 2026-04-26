@@ -13,7 +13,7 @@ _target_track_id: int | None = None
 def _get_model() -> YOLO:
     global _model
     if _model is None:
-        _model = YOLO("yolov8l.pt")
+        _model = YOLO("yolov8n.pt")
     return _model
 
 

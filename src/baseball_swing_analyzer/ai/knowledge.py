@@ -26,17 +26,17 @@ RULES: list[tuple[str, MetricRule]] = [
         ),
     ),
     (
-        "wrist_peak_velocity_px_s",
-        lambda v: None if v >= 1500 else (
+        "wrist_peak_velocity_normalized",
+        lambda v: None if v >= 5.0 else (
             "Bat speed looks low — focus on a tighter hand path and earlier hip rotation to increase whip."
         ),
     ),
     (
         "left_knee_at_contact",
         lambda v: None if 10 <= v <= 45 else (
-            "Front knee is too straight at contact — you're losing leverage. Maintain slight flexion through the ball."
+            "Front knee is too straight at contact — you're losing leverage. Maintain slight flexion through contact."
             if v < 10 else
-            "Front knee is very bent — you may be collapsing into the plate. Push into the ground for a firm front side."
+            "Front knee is very bent — you may be collapsing into your move. Push into the ground for a firm front side."
         ),
     ),
     (
@@ -50,13 +50,13 @@ RULES: list[tuple[str, MetricRule]] = [
     (
         "head_displacement_total",
         lambda v: None if v <= 60 else (
-            "Head is moving a lot during the swing — stay centered over the plate from load to contact."
+            "Head is moving a lot during the swing — stay centered from load to contact."
         ),
     ),
     (
         "lateral_spine_tilt_at_contact",
         lambda v: None if -15 <= v <= 15 else (
-            "You may be leaning away from the plate at contact — stay stacked and drive through the middle of the ball."
+            "You may be leaning away at contact — stay stacked and drive through the middle."
         ),
     ),
 ]
@@ -78,6 +78,14 @@ FLAG_CUES: dict[str, list[tuple[Callable[[Any], bool], str]]] = {
 
 def generate_static_report(metrics: dict) -> list[str]:
     """Build a coaching report from the static rule set + qualitative flags."""
+    pcm = metrics.get("pose_confidence_mean", 1.0)
+    if pcm < 0.4:
+        return [(
+            f"Pose detection confidence is low ({pcm*100:.0f}%). "
+            "Results may be unreliable — try a video with better lighting, "
+            "less occlusion, or the full body in frame."
+        )]
+
     cues: list[str] = []
 
     # Metric-based rules
@@ -107,7 +115,7 @@ def generate_static_report(metrics: dict) -> list[str]:
         # Finish height tip
         finish = flags.get("finish_height")
         if finish == "low":
-            cues.append("Low finish detected — stay through the ball longer and extend your arms toward the pitcher.")
+            cues.append("Low finish detected — stay through contact longer and extend through the middle of the field.")
 
     if not cues:
         cues.append("Swing mechanics look solid. Keep working on consistency and timing.")

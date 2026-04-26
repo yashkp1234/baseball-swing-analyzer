@@ -28,6 +28,15 @@ COCO_RWRIST = 10
 COCO_LELBOW = 7
 COCO_RELBOW = 8
 
+JOINT_TO_KEYPOINT_IDX = {
+    "right_wrist": 10,
+    "left_wrist": 9,
+    "right_elbow": 8,
+    "left_elbow": 7,
+    "hip_center": 12,
+    "shoulder_center": 6,
+}
+
 
 def compute_velocities(
     keypoints_3d: NDArray[np.floating],
@@ -85,13 +94,12 @@ def _cross_correlation_lag(a: NDArray, b: NDArray, max_lag: int = 10) -> int:
 def compute_kinetic_chain_scores(
     keypoints_3d: NDArray[np.floating],
     fps: float,
-) -> dict[str, float]:
-    """Compute kinetic chain efficiency scores.
+) -> dict[str, dict]:
+    """Compute kinetic chain lag/direction indicators.
 
-    Returns scores between 0 and 1 for each transfer segment:
-    - hip_to_shoulder: how well hip rotation leads shoulder rotation
-    - shoulder_to_hand: how well shoulder rotation leads hand speed
-    - overall: weighted combination
+    Returns dict with direction info for each transfer segment:
+    - lag_frames: how many frames the downstream segment lags
+    - direction: 'leads' if lag >= 1, 'trails' if lag <= -1, 'synced' otherwise
     """
     velocities = compute_velocities(keypoints_3d, fps)
     speeds = compute_speeds(velocities)
@@ -103,20 +111,22 @@ def compute_kinetic_chain_scores(
     max_lag = min(10, len(hip_speed) // 3)
 
     if len(hip_speed) < 5:
-        return {"hip_to_shoulder": 0.5, "shoulder_to_hand": 0.5, "overall": 0.5}
+        synced = {"lag_frames": 0, "direction": "synced"}
+        return {"hip_to_shoulder": synced, "shoulder_to_hand": synced}
 
     lag_hs = _cross_correlation_lag(hip_speed, shoulder_speed, max_lag=max_lag)
     lag_sh = _cross_correlation_lag(shoulder_speed, wrist_speed, max_lag=max_lag)
 
-    hip_to_shoulder = min(1.0, max(0.0, 0.5 + lag_hs * 0.15))
-    shoulder_to_hand = min(1.0, max(0.0, 0.5 + lag_sh * 0.15))
-
-    overall = hip_to_shoulder * 0.4 + shoulder_to_hand * 0.6
+    def _direction(lag: int) -> str:
+        if lag >= 1:
+            return "leads"
+        if lag <= -1:
+            return "trails"
+        return "synced"
 
     return {
-        "hip_to_shoulder": float(hip_to_shoulder),
-        "shoulder_to_hand": float(shoulder_to_hand),
-        "overall": float(overall),
+        "hip_to_shoulder": {"lag_frames": int(lag_hs), "direction": _direction(lag_hs)},
+        "shoulder_to_hand": {"lag_frames": int(lag_sh), "direction": _direction(lag_sh)},
     }
 
 
@@ -180,6 +190,7 @@ def detect_energy_loss_events(
                 events.append({
                     "frame": t,
                     "joint": name,
+                    "joint_index": JOINT_TO_KEYPOINT_IDX.get(name, -1),
                     "type": etype,
                     "magnitude_pct": round(float(drop_pct), 1),
                     "description": desc,

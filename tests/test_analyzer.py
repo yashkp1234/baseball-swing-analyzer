@@ -6,7 +6,13 @@ from unittest.mock import MagicMock, patch
 import numpy as np
 import pytest
 
-from baseball_swing_analyzer.analyzer import analyze_swing
+from baseball_swing_analyzer.analyzer import (
+    _adaptive_sample_indices,
+    _analysis_budget,
+    _transcode_video_for_browser,
+    _subsample_indices,
+    analyze_swing,
+)
 
 
 def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
@@ -37,3 +43,54 @@ def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
     assert "phase_durations" in result
     assert "contact_frame" in result
     assert (out_dir / "annotated.mp4").exists()
+
+
+def test_analysis_budget_uses_gpu_settings() -> None:
+    with patch("baseball_swing_analyzer.analyzer.pose_device", return_value="cuda"), \
+         patch.dict("os.environ", {}, clear=False):
+        target_fps, max_frames = _analysis_budget()
+
+    assert target_fps == 30.0
+    assert max_frames == 120
+
+
+def test_subsample_indices_respect_max_frames() -> None:
+    indices = _subsample_indices(300, 30.0, 15.0, 48)
+    assert len(indices) == 48
+
+
+def test_adaptive_sample_indices_focus_on_motion_window() -> None:
+    motion = np.zeros(300, dtype=np.float32)
+    motion[120:181] = 10.0
+
+    indices = _adaptive_sample_indices(300, 30.0, 24.0, 72, motion)
+
+    assert len(indices) == 72
+    in_window = [idx for idx in indices if 120 <= idx <= 180]
+    assert len(in_window) >= 40
+
+
+def test_adaptive_sample_indices_fall_back_when_motion_is_flat() -> None:
+    motion = np.zeros(300, dtype=np.float32)
+
+    adaptive = _adaptive_sample_indices(300, 30.0, 24.0, 72, motion)
+    uniform = _subsample_indices(300, 30.0, 24.0, 72)
+
+    assert adaptive == uniform
+
+
+def test_transcode_video_for_browser_uses_h264(tmp_path: Path) -> None:
+    src = tmp_path / "annotated.raw.mp4"
+    dst = tmp_path / "annotated.mp4"
+    src.write_bytes(b"raw-video")
+
+    with patch("imageio_ffmpeg.get_ffmpeg_exe", return_value="ffmpeg.exe"), \
+         patch("subprocess.run") as run:
+        _transcode_video_for_browser(src, dst)
+
+    cmd = run.call_args.args[0]
+    assert "ffmpeg.exe" == cmd[0]
+    assert "-c:v" in cmd and "libx264" in cmd
+    assert "yuv420p" in cmd
+    assert str(src) in cmd
+    assert str(dst) in cmd

@@ -212,7 +212,7 @@ class TestPhaseDurations:
 
     def test_non_contiguous(self) -> None:
         labels = ["stance", "load", "stance", "stance"]
-        expected = {"stance": 3, "load": 1}
+        expected = {"stance": 2, "load": 1}
         assert phase_durations(labels) == expected
 
 

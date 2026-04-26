@@ -16,6 +16,13 @@ UPLOAD_DIR = Path(__file__).resolve().parent.parent / "uploads"
 OUTPUT_DIR = Path(__file__).resolve().parent.parent / "outputs"
 
 
+def _job_progress(base: float, span: float, current: int, total: int) -> float:
+    if total <= 0:
+        return base
+    ratio = min(max(current / total, 0.0), 1.0)
+    return base + span * ratio
+
+
 def run_analysis(job_id: str) -> None:
     logger.info(f"[Job {job_id[:8]}] Starting analysis")
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -27,7 +34,15 @@ def run_analysis(job_id: str) -> None:
         return
 
     try:
-        db.update_job(job_id, status="processing", progress=0.05, current_step="queued")
+        db.update_job(
+            job_id,
+            status="processing",
+            progress=0.02,
+            current_step="queued",
+            progress_detail_current=None,
+            progress_detail_total=None,
+            progress_detail_label=None,
+        )
 
         from baseball_swing_analyzer.analyzer import analyze_swing
 
@@ -37,22 +52,37 @@ def run_analysis(job_id: str) -> None:
         logger.info(f"[Job {job_id[:8]}] Video: {video_path}, Output: {out_dir}")
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        db.update_job(job_id, progress=0.1, current_step="detecting_hitter")
+        db.update_job(job_id, progress=0.08, current_step="loading_video")
+
+        def on_pose_progress(current: int, total: int) -> None:
+            db.update_job(
+                job_id,
+                progress=_job_progress(0.15, 0.5, current, total),
+                current_step="pose_inference",
+                progress_detail_current=current,
+                progress_detail_total=total,
+                progress_detail_label="frames",
+            )
 
         result = analyze_swing(
             video_path=video_path,
             output_dir=out_dir,
             annotate=True,
             handedness="auto",
+            progress_callback=on_pose_progress,
         )
 
         logger.info(f"[Job {job_id[:8]}] Analysis complete, computing metrics")
-        db.update_job(job_id, progress=0.6, current_step="computing_metrics")
+        db.update_job(job_id, progress=0.7, current_step="computing_metrics")
 
         from baseball_swing_analyzer.reporter import write_metrics_json
         write_metrics_json(result, out_dir / "metrics.json")
 
-        db.update_job(job_id, progress=0.75, current_step="generating_coaching")
+        db.update_job(job_id, progress=0.8, current_step="generating_coaching")
+
+        from baseball_swing_analyzer.sport import detect_sport_profile
+
+        result["sport_profile"] = detect_sport_profile(job["original_filename"], result)
 
         from baseball_swing_analyzer.ai.knowledge import generate_static_report
 
@@ -61,21 +91,18 @@ def run_analysis(job_id: str) -> None:
         (out_dir / "coaching.md").write_text(
             "\n".join(f"- {c}" for c in coaching_lines), encoding="utf-8"
         )
+        result["_coaching_lines"] = coaching_lines
 
-        db.update_job(job_id, progress=0.85, current_step="generating_3d_data")
+        db.update_job(job_id, progress=0.9, current_step="generating_3d_data")
 
         from baseball_swing_analyzer.export_3d import generate_swing_3d_data_from_keypoints
 
-        kps_path = out_dir / "keypoints.npy"
-        if kps_path.exists():
-            keypoints_seq = np.load(str(kps_path))
-            phase_labels = result.get("phase_labels", [])
-            fps = result.get("fps", 30.0)
-            frame_data = generate_swing_3d_data_from_keypoints(
-                keypoints_seq, phase_labels, fps, report=result
-            )
-        else:
-            frame_data = generate_swing_3d_data(result)
+        keypoints_seq = result.pop("_keypoints_seq")
+        phase_labels = result.get("phase_labels", [])
+        fps = result.get("fps", 30.0)
+        frame_data = generate_swing_3d_data_from_keypoints(
+            keypoints_seq, phase_labels, fps, report=result
+        )
 
         frames_3d_json = json.dumps(frame_data, default=str)
         (out_dir / "frames_3d.json").write_text(frames_3d_json, encoding="utf-8")
@@ -86,9 +113,10 @@ def run_analysis(job_id: str) -> None:
             status="completed",
             progress=1.0,
             current_step="done",
+            progress_detail_current=None,
+            progress_detail_total=None,
+            progress_detail_label=None,
             metrics_json=json.dumps(result, default=str),
-            coaching_html=coaching_html,
-            frames_3d_json=frames_3d_json,
             completed_at=datetime.now(timezone.utc).isoformat(),
         )
 

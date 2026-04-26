@@ -17,5 +17,8 @@ async def get_status(job_id: str):
         "status": job["status"],
         "progress": job["progress"],
         "current_step": job["current_step"],
+        "progress_detail_current": job.get("progress_detail_current"),
+        "progress_detail_total": job.get("progress_detail_total"),
+        "progress_detail_label": job.get("progress_detail_label"),
         "error_message": job["error_message"],
     }

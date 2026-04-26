@@ -37,7 +37,7 @@ This document defines how the main session (orchestrator) spawns, monitors, and 
 ## Spawn Protocol
 
 For each agent invocation:
-1. **Load context.** Before spawning, read the relevant section of `plan.md`, existing source files, and agent instruction file.
+1. **Load context.** Before spawning, read the relevant section of `plans/01-implementation-plan.md`, existing source files, and agent instruction file.
 2. **Pass contract.** The prompt must contain:
    - Exact scope (one module or one metric).
    - Input/output format expected.
@@ -54,7 +54,18 @@ For each agent invocation:
 - Never let an agent change `pyproject.toml` without orchestrator approval (it affects everyone).
 - After every accepted PR, update `AGENTS.md` session notes with what changed.
 
+## Plans Directory
+
+All plan and audit documents live in `plans/`:
+- `plans/01-implementation-plan.md` — original phase-by-phase plan
+- `plans/02-improvement-plan.md` — bug-fix task list (IMPROVEMENT_PLAN)
+- `plans/03-phase5-6-web-3d.md` — Phase 5 (web app) + Phase 6 (3D viz)
+- `plans/04-architecture-audit.md` — historical audit snapshot (2026-04-24)
+- `plans/05-web-design-plan.md` — frontend design system and component plan
+
+When creating new plans, number them sequentially and keep them in `plans/`. Do not scatter plan files at the repo root or in `docs/`.
+
 ## Decision Log
 (Use this to record why later agents were spawned or skipped.)
-- 2026-04-22: Rewrote `plan.md` after `reality-check` found CLIFF/LLM too heavy for MVP. Phase 2 made optional, Phase 3 cloud-only.
+- 2026-04-22: Rewrote `plans/01-implementation-plan.md` after `reality-check` found CLIFF/LLM too heavy for MVP. Phase 2 made optional, Phase 3 cloud-only.
 - 2026-04-22: Created agent roster and orchestration playbook.
