@@ -37,3 +37,23 @@ All derived from COCO-17 pose keypoints. Units are degrees for angles, pixels fo
 - `head_displacement_total`
 - `wrist_peak_velocity_px_s`
 - `frames`, `fps`
+
+## Swing Segments
+
+Long videos are reduced to active swing windows using wrist and hand velocity. The segment detector keeps a pre-swing buffer so the load, hand start, and stride context remain visible instead of clipping directly at the fastest hand movement. If multiple swings are present, the analyzer returns multiple segment windows and chooses the highest-confidence segment as the primary report.
+
+Segment fields:
+
+- `start_frame`
+- `end_frame`
+- `contact_frame`
+- `duration_s`
+- `confidence`
+
+## Estimated Bat And Ball Position
+
+The viewer estimates bat handle and barrel position from wrist and forearm keypoints. The ball/contact point is estimated from the barrel position at the contact frame. These are visual coaching aids, not measured bat or ball tracking.
+
+## Projected EV And Carry
+
+Projected exit velocity and carry are pose-proxy estimates. They help compare the current swing against a projected mechanical change, but they are not measured launch metrics or measured ball flight.

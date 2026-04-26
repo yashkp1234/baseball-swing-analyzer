@@ -9,9 +9,11 @@ Analyze baseball swings from phone video and extract key biomechanical metrics w
 - **Pose estimation**: RTMO-m via rtmlib (COCO-17 keypoints)
 - **Keypoint smoothing**: Temporal moving average across frames
 - **Phase detection**: Rule-based (stance → load → stride → swing → contact → follow-through)
+- **Swing segmentation**: Long clips are trimmed to buffered active swing windows, with multiple swings broken out separately
 - **Biomechanical metrics**: hip/shoulder angles, x-factor, knee flexion, spine tilt, stride timing, normalized wrist velocity (bat speed proxy), head displacement
-- **3D visualization**: Heuristic depth lifting with kinetic chain analysis and energy loss detection
-- **Annotated video output**: Skeleton overlay + phase labels
+- **Swing breakdown viewer**: Heuristic depth lifting with estimated bat/barrel and contact-point visuals
+- **Projected fix preview**: Toggle a lower-half timing fix and compare estimated score, EV, and carry
+- **Annotated video output**: Trimmed skeleton overlay + phase labels
 - **AI coaching**: Static rule-based coaching cues + optional Ollama Cloud LLM integration
 - **Async server**: Upload video, poll for status, fetch results — no blocking
 
@@ -62,6 +64,8 @@ Maximum upload size: 500 MB. Allowed extensions: `.mp4`, `.mov`, `.avi`, `.mkv`.
 | head_displacement_total | Head movement (load→contact) | <60 px |
 | lateral_spine_tilt_at_contact | Side-bend at contact | ±15° |
 
+Bat position, ball/contact position, projected EV, and projected carry are estimates derived from pose data. They are intended for coaching comparison, not measured bat tracking or measured ball flight.
+
 ## Architecture
 
 ```
@@ -69,10 +73,11 @@ Phone Video
     ├─ Quality gate (blur check, fps)
     ├─ YOLOv8n person detect
     ├─ RTMPose-m → 17 keypoints + smoothing
+    ├─ Swing segmentation with pre-swing buffer
     ├─ Rule-based phase detection
     ├─ 2D metric extraction → JSON
-    ├─ Heuristic 3D lifting → energy analysis
-    ├─ Annotated video overlay
+    ├─ Heuristic 3D lifting → estimated bat/contact visualization
+    ├─ Trimmed annotated video overlay
     └─ AI coaching report (static rules + optional LLM)
 ```
 
