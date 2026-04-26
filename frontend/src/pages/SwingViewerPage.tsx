@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ArrowLeft, Pause, Play, RotateCcw } from "lucide-react";
 import { getFrames3D, getJobResults, projectSwing } from "@/lib/api";
-import type { AnalysisSummary as AnalysisSummaryData, ProjectionResponse, Swing3DData } from "@/lib/api";
+import type { AnalysisSummary as AnalysisSummaryData, ProjectionResponse, SportProfile, Swing3DData } from "@/lib/api";
 import { PHASE_COLORS } from "@/lib/metrics";
 import { HipShoulderDiagram } from "@/components/HipShoulderDiagram";
 import { PhaseEnergyChart } from "@/components/PhaseEnergyChart";
@@ -29,6 +29,18 @@ const TABS = [
 ] as const;
 
 type ViewerTab = (typeof TABS)[number]["id"];
+
+function sportLabel(profile: SportProfile | null | undefined): string {
+  if (!profile || profile.label === "unknown") return "Not confidently detected";
+  return profile.label === "baseball" ? "Baseball" : "Softball";
+}
+
+function sportNote(profile: SportProfile | null | undefined): string {
+  if (!profile || profile.label === "unknown") {
+    return "Using shared hitting guidance because sport was not confidently detected.";
+  }
+  return `Using ${profile.label}-aware wording where coaching and estimate framing differ.`;
+}
 
 function Shimmer({ className = "" }: { className?: string }) {
   return (
@@ -70,6 +82,7 @@ export function SwingViewerPage() {
   const [baseData, setBaseData] = useState<Swing3DData | null>(null);
   const [activeData, setActiveData] = useState<Swing3DData | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisSummaryData | null>(null);
+  const [sportProfile, setSportProfile] = useState<SportProfile | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
   const [speed, setSpeed] = useState(1);
@@ -91,6 +104,7 @@ export function SwingViewerPage() {
         setBaseData(frames);
         setActiveData(frames);
         setAnalysis(results.analysis);
+        setSportProfile(results.sport_profile);
       })
       .catch((requestError: Error) => setError(requestError.message));
   }, [jobId]);
@@ -104,6 +118,9 @@ export function SwingViewerPage() {
         if (requestId !== latestProjectionRequest.current) return;
         setBaselineProjection(result.baseline);
         setProjection(null);
+        if (result.sport_profile) {
+          setSportProfile(result.sport_profile);
+        }
         setProjectionError(null);
       })
       .catch((requestError: Error) => {
@@ -144,6 +161,9 @@ export function SwingViewerPage() {
       setBaselineProjection(result.baseline);
       const isBaseline = input.x_factor_delta_deg === 0 && input.head_stability_delta_norm === 0;
       setProjection(isBaseline ? null : result.projection);
+      if (result.sport_profile) {
+        setSportProfile(result.sport_profile);
+      }
       setActiveData(isBaseline ? baseData : result.viewer);
     } catch (requestError) {
       if (requestId !== latestProjectionRequest.current) return;
@@ -353,6 +373,15 @@ export function SwingViewerPage() {
             {activeTab === "overview" ? (
               <div className="flex h-full flex-col gap-4">
                 <AnalysisSummary analysis={analysis} />
+                <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
+                  <div className="mb-2 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">Detected Sport</h3>
+                    <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
+                      {sportLabel(sportProfile)}
+                    </span>
+                  </div>
+                  <p className="text-xs text-[var(--color-text-dim)]">{sportNote(sportProfile)}</p>
+                </div>
                 <ErrorBoundary>
                   <Panel title="Power Through Your Swing" subtitle="Where energy built up — and where it leaked" accent="#00FF87">
                     <PhaseEnergyChart
@@ -383,6 +412,7 @@ export function SwingViewerPage() {
                   <WhatIfSimulator
                     baselineXFactor={Number(displayedData.metrics.x_factor_at_contact ?? 0)}
                     baselineHeadDisplacementPx={Number(displayedData.metrics.head_displacement_total ?? 0)}
+                    sportProfile={sportProfile}
                     baseline={baselineProjection}
                     projection={projection}
                     pending={projectionPending}

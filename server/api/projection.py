@@ -29,8 +29,14 @@ async def project_job(job_id: str, payload: ProjectionPayload):
         raise HTTPException(status_code=409, detail="job artifacts unavailable")
 
     viewer_data = json.loads(file_path.read_text())
+    metrics_payload = json.loads(job["metrics_json"]) if job.get("metrics_json") else {}
+    sport_profile = metrics_payload.get("sport_profile")
+    if sport_profile is not None:
+        viewer_data.setdefault("metrics", {})["sport_profile"] = sport_profile
     request = ProjectionRequest(
         x_factor_delta_deg=payload.x_factor_delta_deg,
         head_stability_delta_norm=payload.head_stability_delta_norm,
     )
-    return project_swing_viewer_data(viewer_data, request)
+    projected = project_swing_viewer_data(viewer_data, request)
+    projected["sport_profile"] = sport_profile
+    return projected

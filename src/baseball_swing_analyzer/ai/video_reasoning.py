@@ -59,7 +59,7 @@ def build_vision_prompt(metrics: dict, captions: list[str]) -> str:
     caption_text = "\n".join(f"  {c}" for c in captions)
 
     return (
-        "You are an expert MLB hitting coach analysing a baseball swing from video frames.\n\n"
+        "You are an expert hitting coach analysing a swing from video frames.\n\n"
         "IMPORTANT: Do not think out loud. Output ONLY the structured answers below. "
         "No chain-of-thought. No explanations of how you arrived at the answer.\n\n"
         "The swing has already been processed by a computer-vision pipeline that outputs these metrics:\n"

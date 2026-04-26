@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { LoaderCircle, RotateCcw } from "lucide-react";
-import type { ProjectionSummary } from "@/lib/api";
+import type { ProjectionSummary, SportProfile } from "@/lib/api";
 
 export interface ProjectionInput {
   x_factor_delta_deg: number;
@@ -65,6 +65,7 @@ function SliderRow({ label, description, value, min, max, step, unit, onChange, 
 interface Props {
   baselineXFactor: number;
   baselineHeadDisplacementPx: number;
+  sportProfile: SportProfile | null;
   baseline: ProjectionSummary | null;
   projection: ProjectionSummary | null;
   pending: boolean;
@@ -74,9 +75,14 @@ interface Props {
   onReset: () => void;
 }
 
+function formatRange(low: number, high: number, unit: string): string {
+  return `${low.toFixed(0)}-${high.toFixed(0)} ${unit}`;
+}
+
 export function WhatIfSimulator({
   baselineXFactor,
   baselineHeadDisplacementPx,
+  sportProfile,
   baseline,
   projection,
   pending,
@@ -92,16 +98,17 @@ export function WhatIfSimulator({
   }, [resetToken]);
 
   const commit = () => onApply(draft);
+  const activeProjection = projection ?? baseline;
 
   return (
     <div className="flex h-full flex-col gap-5">
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-text-dim)]" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>
-            Baseline EV
+            Estimated EV
           </p>
           <p className="mt-2 text-2xl font-bold text-[var(--color-text)]" style={{ fontFamily: "DM Mono, monospace" }}>
-            {baseline ? `${baseline.exit_velocity_mph.toFixed(1)} mph` : "—"}
+            {baseline ? formatRange(baseline.exit_velocity_mph_low, baseline.exit_velocity_mph_high, "mph") : "-"}
           </p>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
@@ -109,21 +116,29 @@ export function WhatIfSimulator({
             Projected EV
           </p>
           <p className="mt-2 text-2xl font-bold text-[var(--color-accent)]" style={{ fontFamily: "DM Mono, monospace" }}>
-            {projection ? `${projection.exit_velocity_mph.toFixed(1)} mph` : (baseline ? `${baseline.exit_velocity_mph.toFixed(1)} mph` : "—")}
+            {activeProjection ? formatRange(activeProjection.exit_velocity_mph_low, activeProjection.exit_velocity_mph_high, "mph") : "-"}
           </p>
         </div>
         <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3">
           <p className="text-[10px] uppercase tracking-widest text-[var(--color-text-dim)]" style={{ fontFamily: "Barlow Condensed, sans-serif", fontWeight: 600 }}>
-            Carry
+            Estimated Carry
           </p>
           <p className="mt-2 text-2xl font-bold text-[var(--color-text)]" style={{ fontFamily: "DM Mono, monospace" }}>
-            {projection ? `${projection.carry_distance_ft.toFixed(0)} ft` : (baseline ? `${baseline.carry_distance_ft.toFixed(0)} ft` : "—")}
+            {activeProjection ? formatRange(activeProjection.carry_distance_ft_low, activeProjection.carry_distance_ft_high, "ft") : "-"}
           </p>
         </div>
       </div>
 
+      <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-[11px] text-[var(--color-text-dim)]">
+        Pose-only projection using body mechanics proxies. These are directional estimate ranges, not measured ball-flight outcomes.
+        {sportProfile?.label === "unknown" ? " Using shared hitting calibration because sport was not confidently detected." : ""}
+        <span className="ml-2 font-mono text-[var(--color-text)]">
+          Score {baseline ? baseline.score : "-"}{projection ? ` -> ${projection.score}` : ""}
+        </span>
+      </div>
+
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] p-3 text-xs text-[var(--color-text-dim)]">
-        Baseline mechanics: <span className="font-mono text-[var(--color-text)]">{baselineXFactor.toFixed(1)}° X-factor</span> and{" "}
+        Baseline mechanics: <span className="font-mono text-[var(--color-text)]">{baselineXFactor.toFixed(1)} deg X-factor</span> and{" "}
         <span className="font-mono text-[var(--color-text)]">{baselineHeadDisplacementPx.toFixed(1)} px head drift</span>.
       </div>
 
@@ -135,7 +150,7 @@ export function WhatIfSimulator({
           min={-12}
           max={12}
           step={1}
-          unit="°"
+          unit="deg"
           onChange={(value) => setDraft((current) => ({ ...current, x_factor_delta_deg: value }))}
           onCommit={commit}
         />
@@ -156,7 +171,7 @@ export function WhatIfSimulator({
       <div className="flex items-center justify-between rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-2 text-xs text-[var(--color-text-dim)]">
         <div className="flex items-center gap-2">
           {pending ? <LoaderCircle className="h-4 w-4 animate-spin text-[var(--color-accent)]" /> : null}
-          <span>{pending ? "Updating projected swing…" : "Apply a change by releasing a slider."}</span>
+          <span>{pending ? "Updating projected swing..." : "Apply a change by releasing a slider."}</span>
         </div>
         <button
           type="button"
@@ -169,9 +184,9 @@ export function WhatIfSimulator({
       </div>
 
       {error ? <p className="text-xs text-[var(--color-red)]">{error}</p> : null}
-      {projection?.notes?.length ? (
+      {activeProjection?.notes?.length ? (
         <ul className="space-y-1 text-xs text-[var(--color-text-dim)]">
-          {projection.notes.map((note) => (
+          {activeProjection.notes.map((note) => (
             <li key={note}>{note}</li>
           ))}
         </ul>

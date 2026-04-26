@@ -16,6 +16,14 @@ export interface AnalysisSummary {
   pose_inference_duration_ms?: number;
 }
 
+export interface SportProfile {
+  label: "baseball" | "softball" | "unknown";
+  confidence: number;
+  context_confidence: number;
+  mechanics_confidence: number;
+  reasons: string[];
+}
+
 export interface SwingMetrics {
   phase_durations: Record<string, number>;
   stride_plant_frame: number | null;
@@ -71,14 +79,19 @@ export interface Swing3DData {
   frames: Frame3D[];
   kinetic_chain_scores: { hip_to_shoulder: number; shoulder_to_hand: number; overall: number };
   energy_loss_events: EnergyLossEvent[];
-  metrics: Record<string, number | string>;
+  metrics: Record<string, unknown>;
   skeleton: [number, number][];
   keypoint_names: string[];
 }
 
 export interface ProjectionSummary {
+  estimate_basis: string;
   exit_velocity_mph: number;
+  exit_velocity_mph_low: number;
+  exit_velocity_mph_high: number;
   carry_distance_ft: number;
+  carry_distance_ft_low: number;
+  carry_distance_ft_high: number;
   score: number;
   notes?: string[];
 }
@@ -87,6 +100,7 @@ export interface ProjectionResponse {
   baseline: ProjectionSummary;
   projection: ProjectionSummary;
   viewer: Swing3DData;
+  sport_profile: SportProfile | null;
 }
 
 export interface JobStatus {
@@ -105,6 +119,7 @@ export interface JobResults {
   status: "completed" | "failed";
   metrics: SwingMetrics | null;
   analysis: AnalysisSummary | null;
+  sport_profile: SportProfile | null;
   coaching: CoachingLine[] | null;
   frames_3d_url: string;
 }

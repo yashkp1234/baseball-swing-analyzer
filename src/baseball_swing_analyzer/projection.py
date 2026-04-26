@@ -42,7 +42,15 @@ def project_swing_viewer_data(viewer_data: dict, request: ProjectionRequest) -> 
 
     baseline = _estimate_projection_summary(projected.get("metrics", {}), 0.0, 0.0)
     projection = _estimate_projection_summary(projected.get("metrics", {}), x_factor_delta, head_delta)
-    notes: list[str] = ["Projected from baseline swing metrics and viewer-space pose adjustments"]
+    notes: list[str] = [
+        "Pose-only estimate derived from swing mechanics proxies, not measured ball flight",
+        "Projected from baseline swing metrics and viewer-space pose adjustments",
+    ]
+    sport_label = _sport_label(projected.get("metrics", {}))
+    if sport_label == "unknown":
+        notes.append("Using generic hitting calibration because sport was not confidently detected")
+    elif sport_label in {"baseball", "softball"}:
+        notes.append(f"Using {sport_label} interpretation where sport-specific wording applies")
     if x_factor_delta:
         notes.append(f"Applied {x_factor_delta:+.0f} deg x-factor delta")
     if head_delta:
@@ -56,23 +64,37 @@ def project_swing_viewer_data(viewer_data: dict, request: ProjectionRequest) -> 
     }
 
 
-def _estimate_projection_summary(metrics: dict, x_factor_delta: float, head_delta: float) -> dict[str, float | int]:
+def _estimate_projection_summary(metrics: dict, x_factor_delta: float, head_delta: float) -> dict[str, float | int | str]:
     base_x_factor = float(metrics.get("x_factor_at_contact", 0.0) or 0.0)
     head_displacement = float(metrics.get("head_displacement_total", 0.0) or 0.0)
     wrist_velocity = float(metrics.get("wrist_peak_velocity_normalized", 0.0) or 0.0)
+    pose_confidence = float(metrics.get("pose_confidence_mean", 0.0) or 0.0)
 
     adjusted_x_factor = base_x_factor + x_factor_delta
     adjusted_head_displacement = max(0.0, head_displacement - (head_delta / _MAX_HEAD_STABILITY_DELTA) * 12.0)
 
-    head_penalty = min(adjusted_head_displacement / 30.0, 2.0)
-    exit_velocity = 68.0 + wrist_velocity * 12.0 + adjusted_x_factor * 0.45 - head_penalty * 6.0
-    carry_distance = 110.0 + exit_velocity * 2.2 + adjusted_x_factor * 1.1 - head_penalty * 18.0
-    score = 55.0 + wrist_velocity * 9.0 + adjusted_x_factor * 0.55 - head_penalty * 10.0
+    wrist_proxy = _clamp(wrist_velocity, 0.0, 6.0)
+    head_penalty = min(adjusted_head_displacement / 30.0, 2.5)
+    exit_velocity = 60.0 + wrist_proxy * 7.0 + adjusted_x_factor * 0.35 - head_penalty * 3.5
+    carry_distance = 155.0 + max(exit_velocity - 65.0, 0.0) * 4.5 + adjusted_x_factor * 0.75 - head_penalty * 8.0
+    score = 42.0 + wrist_proxy * 8.0 + adjusted_x_factor * 0.6 - head_penalty * 9.0
+    exit_velocity = _clamp(exit_velocity, 55.0, 110.0)
+    carry_distance = _clamp(carry_distance, 140.0, 395.0)
+    score = _clamp(score, 20.0, 99.0)
+
+    confidence = _clamp(pose_confidence, 0.0, 1.0)
+    ev_spread = _clamp(10.0 - confidence * 5.0, 4.0, 10.0)
+    carry_spread = _clamp(ev_spread * 4.5, 18.0, 45.0)
 
     return {
-        "exit_velocity_mph": round(_clamp(exit_velocity, 45.0, 120.0), 1),
-        "carry_distance_ft": round(_clamp(carry_distance, 120.0, 430.0), 1),
-        "score": int(round(_clamp(score, 20.0, 99.0))),
+        "estimate_basis": "pose_proxy",
+        "exit_velocity_mph": round(exit_velocity, 1),
+        "exit_velocity_mph_low": round(_clamp(exit_velocity - ev_spread, 50.0, 110.0), 1),
+        "exit_velocity_mph_high": round(_clamp(exit_velocity + ev_spread, 50.0, 118.0), 1),
+        "carry_distance_ft": round(carry_distance, 1),
+        "carry_distance_ft_low": round(_clamp(carry_distance - carry_spread, 120.0, 395.0), 1),
+        "carry_distance_ft_high": round(_clamp(carry_distance + carry_spread, 120.0, 410.0), 1),
+        "score": int(round(score)),
     }
 
 
@@ -167,3 +189,12 @@ def _point(keypoints: list[list[float]], index: int) -> list[float] | None:
 
 def _clamp(value: float, low: float, high: float) -> float:
     return max(low, min(high, float(value)))
+
+
+def _sport_label(metrics: dict) -> str:
+    sport_profile = metrics.get("sport_profile")
+    if isinstance(sport_profile, dict):
+        label = sport_profile.get("label")
+        if isinstance(label, str):
+            return label
+    return "unknown"

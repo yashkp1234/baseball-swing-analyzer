@@ -105,12 +105,21 @@ async def test_projection_endpoint_returns_projected_viewer(tmp_path: Path) -> N
     fixture = Path("tests/fixtures/viewer_fixture.json")
     out_dir = tmp_path / "output"
     out_dir.mkdir()
-    (out_dir / "frames_3d.json").write_text(fixture.read_text())
+    viewer = __import__("json").loads(fixture.read_text())
+    (out_dir / "frames_3d.json").write_text(__import__("json").dumps(viewer))
+    sport_profile = {
+        "label": "unknown",
+        "confidence": 0.35,
+        "context_confidence": 0.2,
+        "mechanics_confidence": 0.45,
+        "reasons": ["No strong baseball or softball signal detected"],
+    }
 
     with patch("server.api.projection.db.get_job", return_value={
         "id": "job-123",
         "status": "completed",
         "output_dir": str(out_dir),
+        "metrics_json": __import__("json").dumps({"sport_profile": sport_profile}),
     }):
         payload = ProjectionPayload(x_factor_delta_deg=6, head_stability_delta_norm=0.06)
         body = await project_job("job-123", payload)
@@ -118,6 +127,8 @@ async def test_projection_endpoint_returns_projected_viewer(tmp_path: Path) -> N
     assert "baseline" in body
     assert "projection" in body
     assert "viewer" in body
+    assert body["sport_profile"]["label"] == "unknown"
+    assert any("generic hitting calibration" in note.lower() for note in body["projection"]["notes"])
     assert body["projection"]["exit_velocity_mph"] > body["baseline"]["exit_velocity_mph"]
 
 

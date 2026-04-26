@@ -16,7 +16,9 @@ def test_projection_changes_frames_and_returns_estimates() -> None:
 
     result = project_swing_viewer_data(viewer, request)
 
-    assert result["baseline"]["exit_velocity_mph"] > 0
+    assert result["baseline"]["estimate_basis"] == "pose_proxy"
+    assert result["baseline"]["exit_velocity_mph_low"] < result["baseline"]["exit_velocity_mph_high"]
+    assert result["baseline"]["carry_distance_ft_low"] < result["baseline"]["carry_distance_ft_high"]
     assert result["projection"]["exit_velocity_mph"] > result["baseline"]["exit_velocity_mph"]
     assert result["projection"]["carry_distance_ft"] > result["baseline"]["carry_distance_ft"]
     assert result["viewer"]["frames"][viewer["contact_frame"]]["keypoints"][6][2] != baseline_contact
