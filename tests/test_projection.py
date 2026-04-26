@@ -32,3 +32,18 @@ def test_projection_clamps_extreme_inputs() -> None:
 
     assert result["projection"]["exit_velocity_mph"] < 140
     assert result["projection"]["carry_distance_ft"] < 500
+
+
+def test_projection_head_stability_moves_nose_toward_baseline() -> None:
+    viewer = _viewer_fixture()
+    initial_nose = viewer["frames"][0]["keypoints"][0]
+    contact_nose = viewer["frames"][viewer["contact_frame"]]["keypoints"][0]
+    request = ProjectionRequest(head_stability_delta_norm=0.08)
+
+    result = project_swing_viewer_data(viewer, request)
+
+    projected_nose = result["viewer"]["frames"][viewer["contact_frame"]]["keypoints"][0]
+    baseline_drift = abs(contact_nose[0] - initial_nose[0]) + abs(contact_nose[2] - initial_nose[2])
+    projected_drift = abs(projected_nose[0] - initial_nose[0]) + abs(projected_nose[2] - initial_nose[2])
+
+    assert projected_drift < baseline_drift

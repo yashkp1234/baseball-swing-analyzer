@@ -7,6 +7,7 @@ from typing import Iterable
 
 
 _UPPER_CHAIN = (5, 6, 7, 8, 9, 10)
+_HEAD_CORE = (0,)
 _MAX_X_FACTOR_DELTA = 12.0
 _MAX_HEAD_STABILITY_DELTA = 0.12
 
@@ -152,7 +153,7 @@ def _apply_head_stability(keypoints: list[list[float]], initial_nose: list[float
         -(current_nose[1] - initial_nose[1]) * factor,
         -(current_nose[2] - initial_nose[2]) * factor,
     ]
-    for joint_index in _UPPER_CHAIN:
+    for joint_index in (*_HEAD_CORE, *_UPPER_CHAIN):
         point = _point(keypoints, joint_index)
         if point is None:
             continue
