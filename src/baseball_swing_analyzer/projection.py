@@ -16,6 +16,17 @@ _MAX_HEAD_STABILITY_DELTA = 0.12
 class ProjectionRequest:
     x_factor_delta_deg: float = 0.0
     head_stability_delta_norm: float = 0.0
+    fix_id: str | None = None
+
+
+_FIX_PRESETS = {
+    "lower_half_timing": {
+        "label": "Fix lower half timing",
+        "coach_text": "Keep the stride controlled so the front side braces before the swing turns.",
+        "x_factor_delta_deg": 7.0,
+        "head_stability_delta_norm": 0.05,
+    }
+}
 
 
 def project_swing_viewer_data(viewer_data: dict, request: ProjectionRequest) -> dict:
@@ -29,8 +40,9 @@ def project_swing_viewer_data(viewer_data: dict, request: ProjectionRequest) -> 
             "viewer": projected,
         }
 
-    x_factor_delta = _clamp(request.x_factor_delta_deg, -_MAX_X_FACTOR_DELTA, _MAX_X_FACTOR_DELTA)
-    head_delta = _clamp(request.head_stability_delta_norm, -_MAX_HEAD_STABILITY_DELTA, _MAX_HEAD_STABILITY_DELTA)
+    requested_x_factor, requested_head_delta, fix = _resolve_request(request)
+    x_factor_delta = _clamp(requested_x_factor, -_MAX_X_FACTOR_DELTA, _MAX_X_FACTOR_DELTA)
+    head_delta = _clamp(requested_head_delta, -_MAX_HEAD_STABILITY_DELTA, _MAX_HEAD_STABILITY_DELTA)
     start_idx, contact_idx = _projection_window(projected)
     initial_nose = _point(frames[start_idx]["keypoints"], 0)
 
@@ -62,6 +74,7 @@ def project_swing_viewer_data(viewer_data: dict, request: ProjectionRequest) -> 
         "baseline": baseline,
         "projection": projection,
         "viewer": projected,
+        "fix": fix,
     }
 
 
@@ -199,3 +212,14 @@ def _sport_label(metrics: dict) -> str:
         if isinstance(label, str):
             return label
     return "unknown"
+
+
+def _resolve_request(request: ProjectionRequest) -> tuple[float, float, dict | None]:
+    if request.fix_id and request.fix_id in _FIX_PRESETS:
+        preset = _FIX_PRESETS[request.fix_id]
+        return float(preset["x_factor_delta_deg"]), float(preset["head_stability_delta_norm"]), {
+            "id": request.fix_id,
+            "label": str(preset["label"]),
+            "coach_text": str(preset["coach_text"]),
+        }
+    return request.x_factor_delta_deg, request.head_stability_delta_norm, None

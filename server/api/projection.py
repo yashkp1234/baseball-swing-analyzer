@@ -14,6 +14,7 @@ router = APIRouter()
 class ProjectionPayload(BaseModel):
     x_factor_delta_deg: float = 0.0
     head_stability_delta_norm: float = 0.0
+    fix_id: str | None = None
 
 
 @router.post("/{job_id}/projection")
@@ -36,6 +37,7 @@ async def project_job(job_id: str, payload: ProjectionPayload):
     request = ProjectionRequest(
         x_factor_delta_deg=payload.x_factor_delta_deg,
         head_stability_delta_norm=payload.head_stability_delta_norm,
+        fix_id=payload.fix_id,
     )
     projected = project_swing_viewer_data(viewer_data, request)
     projected["sport_profile"] = sport_profile

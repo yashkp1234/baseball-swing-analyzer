@@ -125,6 +125,7 @@ export interface ProjectionResponse {
   projection: ProjectionSummary;
   viewer: Swing3DData;
   sport_profile: SportProfile | null;
+  fix?: { id: string; label: string; coach_text: string } | null;
 }
 
 export interface JobStatus {
@@ -176,7 +177,7 @@ export async function getFrames3D(jobId: string): Promise<Swing3DData> {
 
 export async function projectSwing(
   jobId: string,
-  payload: { x_factor_delta_deg: number; head_stability_delta_norm: number },
+  payload: { x_factor_delta_deg?: number; head_stability_delta_norm?: number; fix_id?: string | null },
 ): Promise<ProjectionResponse> {
   const res = await fetch(`${API_BASE}/${jobId}/projection`, {
     method: "POST",

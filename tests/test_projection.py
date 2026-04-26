@@ -47,3 +47,14 @@ def test_projection_head_stability_moves_nose_toward_baseline() -> None:
     projected_drift = abs(projected_nose[0] - initial_nose[0]) + abs(projected_nose[2] - initial_nose[2])
 
     assert projected_drift < baseline_drift
+
+
+def test_named_lower_half_fix_returns_metadata() -> None:
+    viewer = _viewer_fixture()
+    request = ProjectionRequest(fix_id="lower_half_timing")
+
+    result = project_swing_viewer_data(viewer, request)
+
+    assert result["fix"]["id"] == "lower_half_timing"
+    assert "lower half" in result["fix"]["label"].lower()
+    assert result["projection"]["score"] >= result["baseline"]["score"]
