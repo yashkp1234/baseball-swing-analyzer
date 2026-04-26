@@ -13,7 +13,7 @@ function scoreAccent(score: number): string {
 
 export function ExecutiveSummaryHero({ summary, embedded = false }: ExecutiveSummaryHeroProps) {
   const primaryStep = summary.nextSteps[0]?.text;
-  const supportingSteps = summary.nextSteps.slice(1, 3);
+  const terms = summary.terms ?? [];
 
   return (
     <section
@@ -45,16 +45,22 @@ export function ExecutiveSummaryHero({ summary, embedded = false }: ExecutiveSum
             </div>
           ) : null}
 
-          {supportingSteps.length > 0 ? (
-            <div className="grid gap-2 sm:grid-cols-2">
-              {supportingSteps.map((step) => (
-                <p key={step.text} className="rounded-lg border border-white/8 bg-white/4 px-3 py-2 text-sm leading-6 text-[var(--color-text-dim)]">
-                  {step.text}
-                </p>
-              ))}
+          {terms.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-widest text-[var(--color-text-dim)]">
+                Plain-English terms
+              </p>
+              <dl className="grid gap-3 sm:grid-cols-2">
+                {terms.map((item) => (
+                  <div key={item.term} className="border-l border-[var(--color-accent)]/35 pl-3">
+                    <dt className="text-sm font-medium text-[var(--color-text)]">{item.term}</dt>
+                    <dd className="mt-1 text-sm leading-6 text-[var(--color-text-dim)]">{item.definition}</dd>
+                  </div>
+                ))}
+              </dl>
             </div>
           ) : null}
-          </div>
+        </div>
       </div>
     </section>
   );

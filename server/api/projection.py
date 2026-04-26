@@ -17,15 +17,22 @@ class ProjectionPayload(BaseModel):
     fix_id: str | None = None
 
 
+def _viewer_artifact_path(output_dir: str, swing: int | None) -> Path:
+    base = Path(output_dir)
+    if swing is not None:
+        return base / f"frames_3d_swing_{swing}.json"
+    return base / "frames_3d.json"
+
+
 @router.post("/{job_id}/projection")
-async def project_job(job_id: str, payload: ProjectionPayload):
+async def project_job(job_id: str, payload: ProjectionPayload, swing: int | None = None):
     job = db.get_job(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="job not found")
     if job.get("status") != "completed":
         raise HTTPException(status_code=409, detail="job artifacts unavailable")
 
-    file_path = Path(job["output_dir"]) / "frames_3d.json"
+    file_path = _viewer_artifact_path(job["output_dir"], swing)
     if not file_path.exists():
         raise HTTPException(status_code=409, detail="job artifacts unavailable")
 

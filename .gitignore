@@ -48,10 +48,21 @@ data/videos/
 # Frontend
 frontend/dist/
 frontend/node_modules/
+frontend/.vite/
+frontend/.vite-temp/
 
 # Uploads & outputs
 uploads/
 outputs/
+server/uploads/
+server/outputs/
+server/*.log
 
 # Server DB
 server/jobs.db
+server/jobs.db-shm
+server/jobs.db-wal
+
+# Local test artifacts
+tests_output_synth/
+tests_output_ui/

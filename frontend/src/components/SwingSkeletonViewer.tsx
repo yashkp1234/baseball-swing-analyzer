@@ -15,6 +15,51 @@ const JOINT_RADIUS = 0.028;
 const BASELINE_COLOR = "#00ff87";
 const PROJECTED_COLOR = "#ffd54a";
 
+function computeViewerBounds(data: Swing3DData) {
+  const points: THREE.Vector3[] = [];
+  for (const frame of data.frames) {
+    for (const point of frame.keypoints) {
+      if (point.length >= 3 && point.every((value) => Number.isFinite(value))) {
+        points.push(new THREE.Vector3(point[0], point[1], point[2]));
+      }
+    }
+    if (frame.bat?.handle?.length === 3 && frame.bat?.barrel?.length === 3) {
+      points.push(new THREE.Vector3(frame.bat.handle[0], frame.bat.handle[1], frame.bat.handle[2]));
+      points.push(new THREE.Vector3(frame.bat.barrel[0], frame.bat.barrel[1], frame.bat.barrel[2]));
+    }
+  }
+  if (data.ball?.contact_position?.length === 3) {
+    points.push(
+      new THREE.Vector3(
+        data.ball.contact_position[0],
+        data.ball.contact_position[1],
+        data.ball.contact_position[2],
+      ),
+    );
+  }
+
+  const fallbackCenter = new THREE.Vector3(0, 0, 0);
+  if (points.length === 0) {
+    return {
+      center: fallbackCenter,
+      size: new THREE.Vector3(2.2, 2.2, 2.2),
+      radius: 1.1,
+      floorY: -1,
+    };
+  }
+
+  const box = new THREE.Box3().setFromPoints(points);
+  const center = box.getCenter(new THREE.Vector3());
+  const size = box.getSize(new THREE.Vector3());
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  return {
+    center,
+    size,
+    radius: Math.max(sphere.radius, 0.9),
+    floorY: box.min.y,
+  };
+}
+
 export function SwingSkeletonViewer({ data, currentFrame, projected = false, resetToken = 0, onError }: Props) {
   const mountRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -22,9 +67,11 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
   const controlsRef = useRef<OrbitControls | null>(null);
   const jointsRef = useRef<THREE.Mesh[]>([]);
   const bonesRef = useRef<THREE.Line[]>([]);
-  const batRef = useRef<THREE.Line | null>(null);
+  const batRef = useRef<THREE.Mesh | null>(null);
   const ballRef = useRef<THREE.Mesh | null>(null);
   const animationFrameRef = useRef<number | null>(null);
+  const defaultCameraPositionRef = useRef(new THREE.Vector3(0.8, 0.55, 2.4));
+  const defaultTargetRef = useRef(new THREE.Vector3(0, 0.05, 0));
 
   useEffect(() => {
     const mount = mountRef.current;
@@ -53,11 +100,23 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
     try {
       const scene = new THREE.Scene();
       scene.background = new THREE.Color("#05070b");
+      const bounds = computeViewerBounds(data);
+      const horizontalSpan = Math.max(bounds.size.x, bounds.size.z, 1.4);
+      const verticalSpan = Math.max(bounds.size.y, 1.4);
+      const cameraDistance = Math.max(bounds.radius * 2.8, horizontalSpan * 1.25, 2.1);
+      const cameraTarget = bounds.center.clone();
+      const cameraPosition = cameraTarget.clone().add(
+        new THREE.Vector3(horizontalSpan * 0.22, verticalSpan * 0.3, cameraDistance),
+      );
 
       const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-      camera.position.set(0.8, 0.55, 2.4);
-      camera.lookAt(0, 0, 0);
+      camera.near = Math.max(0.01, bounds.radius / 60);
+      camera.far = Math.max(50, bounds.radius * 24);
+      camera.position.copy(cameraPosition);
+      camera.lookAt(cameraTarget);
       cameraRef.current = camera;
+      defaultCameraPositionRef.current = cameraPosition.clone();
+      defaultTargetRef.current = cameraTarget.clone();
 
       const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
       renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -67,9 +126,9 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
       const controls = new OrbitControls(camera, renderer.domElement);
       controls.enableDamping = true;
       controls.dampingFactor = 0.08;
-      controls.minDistance = 1.2;
-      controls.maxDistance = 4.5;
-      controls.target.set(0, 0.05, 0);
+      controls.minDistance = Math.max(bounds.radius * 0.9, 1.1);
+      controls.maxDistance = Math.max(bounds.radius * 6, 5.2);
+      controls.target.copy(cameraTarget);
       controls.update();
       controlsRef.current = controls;
 
@@ -81,12 +140,17 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
       rimLight.position.set(-2.0, 1.4, -1.2);
       scene.add(rimLight);
 
-      const grid = new THREE.GridHelper(3.5, 12, "#143e2b", "#10202c");
-      grid.position.y = -0.92;
+      const gridSize = Math.max(horizontalSpan * 2.6, 3.6);
+      const grid = new THREE.GridHelper(gridSize, 12, "#143e2b", "#10202c");
+      grid.position.y = bounds.floorY - 0.08;
       scene.add(grid);
 
       const axes = new THREE.AxesHelper(0.5);
-      axes.position.set(-1.15, -0.7, 0.95);
+      axes.position.set(
+        cameraTarget.x - horizontalSpan * 0.55,
+        bounds.floorY + 0.18,
+        cameraTarget.z + horizontalSpan * 0.45,
+      );
       scene.add(axes);
 
       const jointMaterial = new THREE.MeshStandardMaterial({
@@ -118,21 +182,20 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
         return line;
       });
 
-      const batGeometry = new THREE.BufferGeometry().setFromPoints([
-        new THREE.Vector3(0, 0, 0),
-        new THREE.Vector3(0, 0, 0),
-      ]);
-      const batMaterial = new THREE.LineBasicMaterial({
-        color: "#f5d36b",
-        transparent: true,
-        opacity: 0.95,
-      });
-      const batLine = new THREE.Line(batGeometry, batMaterial);
-      scene.add(batLine);
-      batRef.current = batLine;
+      const bat = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.018, 0.026, 1, 14),
+        new THREE.MeshStandardMaterial({
+          color: "#f5d36b",
+          emissive: "#513809",
+          roughness: 0.28,
+          metalness: 0.18,
+        }),
+      );
+      scene.add(bat);
+      batRef.current = bat;
 
       const ball = new THREE.Mesh(
-        new THREE.SphereGeometry(0.035, 16, 16),
+        new THREE.SphereGeometry(0.042, 16, 16),
         new THREE.MeshStandardMaterial({ color: "#ffffff", roughness: 0.35 }),
       );
       scene.add(ball);
@@ -166,10 +229,13 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
       onError?.(error instanceof Error ? error.message : "3D viewer failed to initialize");
       return undefined;
     }
-  }, [data.keypoint_names, data.skeleton, onError, projected]);
+  }, [data, data.keypoint_names, data.skeleton, onError, projected]);
 
   useEffect(() => {
-    controlsRef.current?.reset();
+    if (!cameraRef.current || !controlsRef.current) return;
+    cameraRef.current.position.copy(defaultCameraPositionRef.current);
+    controlsRef.current.target.copy(defaultTargetRef.current);
+    controlsRef.current.update();
   }, [resetToken]);
 
   useEffect(() => {
@@ -206,12 +272,19 @@ export function SwingSkeletonViewer({ data, currentFrame, projected = false, res
     const bat = frame.bat;
     if (batRef.current) {
       if (bat && bat.handle.length >= 3 && bat.barrel.length >= 3) {
+        const handle = new THREE.Vector3(bat.handle[0], bat.handle[1], bat.handle[2]);
+        const barrel = new THREE.Vector3(bat.barrel[0], bat.barrel[1], bat.barrel[2]);
+        const direction = barrel.clone().sub(handle);
+        const length = Math.max(direction.length(), 1e-3);
+        const midpoint = handle.clone().add(barrel).multiplyScalar(0.5);
+
         batRef.current.visible = true;
-        batRef.current.geometry.setAttribute(
-          "position",
-          new THREE.BufferAttribute(new Float32Array([...bat.handle.slice(0, 3), ...bat.barrel.slice(0, 3)]), 3),
+        batRef.current.position.copy(midpoint);
+        batRef.current.scale.set(1, length, 1);
+        batRef.current.quaternion.setFromUnitVectors(
+          new THREE.Vector3(0, 1, 0),
+          direction.normalize(),
         );
-        batRef.current.geometry.computeBoundingSphere();
       } else {
         batRef.current.visible = false;
       }

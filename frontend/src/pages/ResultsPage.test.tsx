@@ -87,6 +87,8 @@ describe("ResultsPage", () => {
     expect(html).toContain('aria-label="Executive summary and annotated video"');
     expect(html).toContain("Promising swing");
     expect(html).toContain("Annotated Video");
+    expect(html).toContain("Plain-English terms");
+    expect(html).toContain("Hip-shoulder separation (X-factor)");
     expect(html).not.toMatch(/Detected Sport|Context|Mechanics|not confidently detected/i);
   });
 

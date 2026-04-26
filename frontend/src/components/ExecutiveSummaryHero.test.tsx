@@ -13,6 +13,7 @@ describe("ExecutiveSummaryHero", () => {
           strengths: ["Rotation stays connected instead of leaking early from the pelvis."],
           issues: ["Foot plant is early."],
           nextSteps: [{ tone: "warn", text: "Try a softer, controlled toe-tap load." }],
+          terms: [],
         }}
       />,
     );

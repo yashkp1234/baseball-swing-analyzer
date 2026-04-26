@@ -149,6 +149,10 @@ export interface JobResults {
   frames_3d_url: string;
 }
 
+function viewerArtifactFilename(swing?: number | null): string {
+  return swing && swing > 0 ? `frames_3d_swing_${swing}.json` : "frames_3d.json";
+}
+
 export async function uploadVideo(file: File): Promise<{ job_id: string }> {
   const form = new FormData();
   form.append("video", file);
@@ -169,8 +173,8 @@ export async function getJobResults(jobId: string): Promise<JobResults> {
   return res.json();
 }
 
-export async function getFrames3D(jobId: string): Promise<Swing3DData> {
-  const res = await fetch(`${API_BASE}/${jobId}/artifacts/frames_3d.json`);
+export async function getFrames3D(jobId: string, swing?: number | null): Promise<Swing3DData> {
+  const res = await fetch(`${API_BASE}/${jobId}/artifacts/${viewerArtifactFilename(swing)}`);
   if (!res.ok) throw new Error(`3D data failed: ${res.statusText}`);
   return res.json();
 }
@@ -178,8 +182,10 @@ export async function getFrames3D(jobId: string): Promise<Swing3DData> {
 export async function projectSwing(
   jobId: string,
   payload: { x_factor_delta_deg?: number; head_stability_delta_norm?: number; fix_id?: string | null },
+  swing?: number | null,
 ): Promise<ProjectionResponse> {
-  const res = await fetch(`${API_BASE}/${jobId}/projection`, {
+  const url = swing && swing > 0 ? `${API_BASE}/${jobId}/projection?swing=${swing}` : `${API_BASE}/${jobId}/projection`;
+  const res = await fetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),

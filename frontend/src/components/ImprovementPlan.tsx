@@ -28,18 +28,18 @@ export function ImprovementPlan({ nextSteps, flags }: ImprovementPlanProps) {
         <div className="max-w-2xl">
           <CardTitle className="mb-2 px-0">What to improve next</CardTitle>
           <p className="text-sm leading-6 text-[var(--color-text-dim)]">
-            Keep the next block tight: reinforce the move quality that is already present, then attack the biggest
-            leak showing up in the summary and flags.
+            Treat these as your next coaching cues. Start with the first one and ignore the rest until that move feels
+            more repeatable.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <FlagBadge
-            label="Shoulder"
+            label="Front shoulder"
             value={flags.front_shoulder_closed_load}
             type={flags.front_shoulder_closed_load ? "good" : "warn"}
           />
-          <FlagBadge label="Finish" value={flags.finish_height} type={flags.finish_height === "high" ? "good" : "warn"} />
-          <FlagBadge label="Hip casting" value={flags.hip_casting} type={flags.hip_casting ? "warn" : "good"} />
+          <FlagBadge label="Finish height" value={flags.finish_height} type={flags.finish_height === "high" ? "good" : "warn"} />
+          <FlagBadge label="Hips spinning early" value={flags.hip_casting} type={flags.hip_casting ? "warn" : "good"} />
         </div>
       </div>
 

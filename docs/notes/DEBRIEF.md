@@ -157,10 +157,11 @@ long-term fix.
 - `src/baseball_swing_analyzer/pose.py` — CUDA selection (uncommitted).
 - `src/baseball_swing_analyzer/reporter.py` — JSON `default=str`
   (uncommitted).
-- `DEBRIEF.md` — this file.
+- `docs/notes/DEBRIEF.md` — this file.
 
 Pre-existing uncommitted changes (not mine, left untouched):
 - `src/baseball_swing_analyzer/analyzer.py`
 - `src/baseball_swing_analyzer/detection.py`
 - `src/baseball_swing_analyzer/phases.py`
-- untracked: `benchmark.py`, `poll.py`
+- `scripts/benchmark.py`
+- `scripts/poll_job.py`

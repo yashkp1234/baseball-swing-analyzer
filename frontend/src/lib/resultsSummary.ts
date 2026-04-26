@@ -8,6 +8,7 @@ export interface ExecutiveSummaryModel {
   strengths: string[];
   issues: string[];
   nextSteps: ExecutiveSummaryStep[];
+  terms: SummaryTerm[];
 }
 
 type ScoreZone = "good" | "moderate" | "poor";
@@ -15,6 +16,11 @@ type ScoreZone = "good" | "moderate" | "poor";
 export interface ExecutiveSummaryStep {
   text: string;
   tone: CoachingLine["tone"];
+}
+
+export interface SummaryTerm {
+  term: string;
+  definition: string;
 }
 
 const SCORED_METRICS: Array<keyof SwingMetrics> = [
@@ -57,19 +63,19 @@ function pickStrengths(metrics: SwingMetrics): string[] {
   const strengths: string[] = [];
 
   if (!metrics.flags.hip_casting) {
-    strengths.push("Rotation stays connected instead of leaking early from the pelvis.");
+    strengths.push("Your hips and shoulders are turning in sequence instead of the hips spinning open too early.");
   }
   if (metrics.flags.front_shoulder_closed_load) {
-    strengths.push("The front shoulder stays closed through load, preserving stretch into launch.");
+    strengths.push("Your front shoulder stays closed during the load, which gives you more room to turn into contact.");
   }
   if (metrics.head_displacement_total <= 30) {
-    strengths.push("Head movement stays quiet, giving the swing a stable visual base.");
+    strengths.push("Your head stays fairly steady, which makes the ball easier to track.");
   }
   if (metrics.flags.finish_height === "high") {
-    strengths.push("The finish works uphill through the zone, which supports extension.");
+    strengths.push("Your finish stays high through contact, which helps the bat keep moving through the ball.");
   }
   if (metrics.x_factor_at_contact >= 20) {
-    strengths.push("Hip-shoulder separation is present at contact, which helps carry usable rotational energy.");
+    strengths.push("You create useful hip-shoulder separation at contact, so the torso is storing some turn.");
   }
 
   if (strengths.length === 0) {
@@ -83,19 +89,19 @@ function pickIssues(metrics: SwingMetrics): string[] {
   const issues: string[] = [];
 
   if (metrics.flags.hip_casting) {
-    issues.push("The hips leak early, which can flatten the sequence before the barrel turns loose.");
+    issues.push("Your hips are opening too early, so power starts leaking before the bat gets moving.");
   }
   if (!metrics.flags.front_shoulder_closed_load) {
-    issues.push("The lead shoulder opens too soon and gives away stretch before contact.");
+    issues.push("Your front shoulder opens too soon, so you lose stored rotation before contact.");
   }
   if (metrics.flags.finish_height !== "high") {
-    issues.push("The finish cuts off extension, limiting how long the barrel works through contact.");
+    issues.push("The finish gets cut off, so the bat stops working through contact too early.");
   }
   if (metrics.x_factor_at_contact < 15) {
-    issues.push("Hip-shoulder separation is shallow, so the swing stores less rotational energy.");
+    issues.push("There is not much hip-shoulder separation at contact, so the torso is not storing much turn.");
   }
   if (metrics.head_displacement_total > 45) {
-    issues.push("Head movement drifts too much, making contact harder to repeat.");
+    issues.push("Your head moves too much from load to contact, which makes timing harder to repeat.");
   }
 
   if (issues.length === 0) {
@@ -105,15 +111,75 @@ function pickIssues(metrics: SwingMetrics): string[] {
   return issues.slice(0, 3);
 }
 
+function rewriteCoachingLine(text: string): string {
+  const trimmed = text.trim();
+  const rewrites: Array<[RegExp, string]> = [
+    [
+      /^X-factor is very large.+$/i,
+      "Hip-shoulder separation (X-factor) is on the high side. In plain English: your upper and lower body may be getting too far apart, which can leave the bat late to contact.",
+    ],
+    [
+      /^X-factor is too small.+$/i,
+      "Hip-shoulder separation (X-factor) is on the low side. Let the hips start the turn before the shoulders and hands follow.",
+    ],
+    [
+      /^Foot plant is early.+$/i,
+      "Your front foot is landing early. Slow the stride down so you can stay gathered before you turn.",
+    ],
+    [
+      /^Foot plant is late.+$/i,
+      "Your front foot is landing late. Get the stride down a little sooner so the lower half is braced before the swing.",
+    ],
+    [
+      /^Head is moving a lot.+$/i,
+      "Your head is moving too much from load to contact. Staying more centered should make timing easier.",
+    ],
+    [
+      /^Front shoulder is opening early.+$/i,
+      "Your front shoulder is opening early. Keep it closed a beat longer so the torso stays loaded into launch.",
+    ],
+    [
+      /^Hips are casting early.+$/i,
+      "Your hips are spinning early. Let the stride foot get down before the hips really fire.",
+    ],
+    [
+      /^Low finish detected.+$/i,
+      "Your finish stays low. Let the bat keep moving through contact instead of cutting off right after impact.",
+    ],
+  ];
+
+  for (const [pattern, replacement] of rewrites) {
+    if (pattern.test(trimmed)) return replacement;
+  }
+  return trimmed.replaceAll("lead shoulder", "front shoulder");
+}
+
+function coachingTopic(text: string): string {
+  const normalized = text.toLowerCase();
+  if (normalized.includes("x-factor") || normalized.includes("hip-shoulder separation")) return "separation";
+  if (normalized.includes("front foot") || normalized.includes("foot plant") || normalized.includes("stride")) return "stride";
+  if (normalized.includes("head")) return "head";
+  if (normalized.includes("front shoulder")) return "front-shoulder";
+  if (normalized.includes("finish")) return "finish";
+  if (normalized.includes("hips")) return "hips";
+  return normalized;
+}
+
 function pickNextSteps(
   coaching: CoachingLine[] | null | undefined,
   issues: string[],
 ): ExecutiveSummaryStep[] {
+  const seenTopics = new Set<string>();
   const coachingLines = (coaching ?? [])
-    .map((line) => ({ text: line.text.trim(), tone: line.tone }))
+    .map((line) => ({ text: rewriteCoachingLine(line.text), tone: line.tone }))
     .filter((line) => line.text);
   if (coachingLines.length > 0) {
-    return coachingLines.slice(0, 4);
+    return coachingLines.filter((line) => {
+      const topic = coachingTopic(line.text);
+      if (seenTopics.has(topic)) return false;
+      seenTopics.add(topic);
+      return true;
+    }).slice(0, 4);
   }
 
   return issues
@@ -135,6 +201,30 @@ function buildSummary(label: string, score: number, strengths: string[], nextSte
   return [opener, strengths[0], nextSteps[0]?.text].filter(Boolean).join(" ");
 }
 
+function collectTerms(metrics: SwingMetrics, nextSteps: ExecutiveSummaryStep[]): SummaryTerm[] {
+  const terms: SummaryTerm[] = [];
+  const combinedText = nextSteps.map((step) => step.text).join(" ");
+  if (metrics.x_factor_at_contact !== undefined || /x-factor|hip-shoulder separation/i.test(combinedText)) {
+    terms.push({
+      term: "Hip-shoulder separation (X-factor)",
+      definition: "The difference between how far the hips and shoulders have turned at contact.",
+    });
+  }
+  if (/load/i.test(combinedText)) {
+    terms.push({
+      term: "Load",
+      definition: "The gather before the swing starts forward.",
+    });
+  }
+  if (/contact/i.test(combinedText)) {
+    terms.push({
+      term: "Contact",
+      definition: "The moment the bat reaches the ball.",
+    });
+  }
+  return terms.slice(0, 3);
+}
+
 export function buildExecutiveSummary(
   metrics: SwingMetrics,
   coaching: CoachingLine[] | null | undefined,
@@ -152,5 +242,6 @@ export function buildExecutiveSummary(
     strengths,
     issues,
     nextSteps,
+    terms: collectTerms(metrics, nextSteps),
   };
 }

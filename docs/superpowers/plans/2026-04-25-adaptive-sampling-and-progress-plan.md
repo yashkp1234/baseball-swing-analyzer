@@ -201,7 +201,7 @@ git push origin improvement-plan
 ### Task 5: Benchmark And Tuning
 
 **Files:**
-- Modify: `benchmark.py` or create `scripts/benchmark_analysis.py`
+- Modify: `scripts/benchmark.py` or create `scripts/benchmark_analysis.py`
 - Modify: `src/baseball_swing_analyzer/analyzer.py`
 
 - [ ] **Step 1: Add a repeatable reference benchmark**
@@ -234,7 +234,7 @@ Expected: PASS + runtime target met
 - [ ] **Step 5: Commit**
 
 ```bash
-git add src/baseball_swing_analyzer/analyzer.py benchmark.py
+git add src/baseball_swing_analyzer/analyzer.py scripts/benchmark.py
 git commit -m "perf: tune adaptive sampling for latency target"
 git push origin improvement-plan
 ```

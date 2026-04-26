@@ -81,6 +81,16 @@ Phone Video
     └─ AI coaching report (static rules + optional LLM)
 ```
 
+## Repository Layout
+
+- `src/baseball_swing_analyzer/` - core Python analysis package
+- `server/` - FastAPI backend, job queue, artifact APIs
+- `frontend/` - React/Vite upload and swing viewer app
+- `tests/` - Python tests and fixtures
+- `scripts/` - utility scripts and local benchmarking helpers
+- `plans/` - active implementation plans intentionally kept at the repo root
+- `docs/` - metrics reference, design notes, and session writeups
+
 ## Dependencies
 
 - Python 3.10+

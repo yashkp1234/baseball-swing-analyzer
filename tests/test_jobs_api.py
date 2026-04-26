@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import numpy as np
 import pytest
 from fastapi import HTTPException, Request
 
@@ -66,6 +67,55 @@ def test_run_analysis_emits_detail_progress_fields(tmp_path: Path) -> None:
         update.get("current_step") == "pose_inference" and update.get("progress_detail_label") == "frames"
         for update in updates
     )
+
+
+def test_run_analysis_writes_per_swing_viewer_artifacts(tmp_path: Path) -> None:
+    out_dir = tmp_path / "out"
+
+    fake_result = {
+        "phase_labels": ["load", "contact"],
+        "fps": 24.0,
+        "contact_frame": 1,
+        "_keypoints_seq": np.zeros((2, 17, 3)).tolist(),
+        "_viewer_segments": [
+            {
+                "swing_number": 1,
+                "keypoints_seq": np.zeros((3, 17, 3)).tolist(),
+                "phase_labels": ["load", "contact", "finish"],
+                "report": {"fps": 24.0, "frames": 3, "contact_frame": 1},
+            },
+            {
+                "swing_number": 2,
+                "keypoints_seq": np.zeros((4, 17, 3)).tolist(),
+                "phase_labels": ["load", "stride", "contact", "finish"],
+                "report": {"fps": 24.0, "frames": 4, "contact_frame": 2},
+            },
+        ],
+    }
+
+    def fake_generate(keypoints_seq, phase_labels, fps, report):
+        return {
+            "total_frames": len(keypoints_seq),
+            "phase_labels": phase_labels,
+            "contact_frame": report["contact_frame"],
+        }
+
+    with patch("server.tasks.analyze.db.get_job", return_value={
+        "id": "job-123",
+        "video_path": str(tmp_path / "video.mp4"),
+        "output_dir": str(out_dir),
+        "original_filename": "swing.mp4",
+    }), \
+         patch("server.tasks.analyze.db.update_job"), \
+         patch("baseball_swing_analyzer.analyzer.analyze_swing", return_value=fake_result), \
+         patch("baseball_swing_analyzer.reporter.write_metrics_json"), \
+         patch("baseball_swing_analyzer.sport.detect_sport_profile", return_value={"label": "baseball"}), \
+         patch("baseball_swing_analyzer.ai.knowledge.generate_static_report", return_value=["Good move"]), \
+         patch("baseball_swing_analyzer.export_3d.generate_swing_3d_data_from_keypoints", side_effect=fake_generate):
+        run_analysis("job-123")
+
+    assert (out_dir / "frames_3d_swing_1.json").exists()
+    assert (out_dir / "frames_3d_swing_2.json").exists()
 
 
 @pytest.mark.asyncio
@@ -157,6 +207,27 @@ async def test_projection_endpoint_returns_projected_viewer(tmp_path: Path) -> N
     assert body["sport_profile"]["label"] == "unknown"
     assert any("generic hitting calibration" in note.lower() for note in body["projection"]["notes"])
     assert body["projection"]["exit_velocity_mph"] > body["baseline"]["exit_velocity_mph"]
+
+
+@pytest.mark.asyncio
+async def test_projection_endpoint_uses_requested_swing_artifact(tmp_path: Path) -> None:
+    out_dir = tmp_path / "output"
+    out_dir.mkdir()
+    primary_viewer = {"frames": [{"keypoints": [[0.0, 0.0, 0.0]] * 17}], "contact_frame": 0, "phase_labels": ["contact"], "metrics": {}}
+    swing_two_viewer = {"frames": [{"keypoints": [[1.0, 1.0, 1.0]] * 17}, {"keypoints": [[2.0, 2.0, 2.0]] * 17}], "contact_frame": 1, "phase_labels": ["load", "contact"], "metrics": {}}
+    (out_dir / "frames_3d.json").write_text(__import__("json").dumps(primary_viewer))
+    (out_dir / "frames_3d_swing_2.json").write_text(__import__("json").dumps(swing_two_viewer))
+
+    with patch("server.api.projection.db.get_job", return_value={
+        "id": "job-123",
+        "status": "completed",
+        "output_dir": str(out_dir),
+        "metrics_json": __import__("json").dumps({}),
+    }):
+        body = await project_job("job-123", ProjectionPayload(), 2)
+
+    assert body["viewer"]["contact_frame"] == 1
+    assert len(body["viewer"]["frames"]) == 2
 
 
 @pytest.mark.asyncio

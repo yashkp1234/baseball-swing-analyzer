@@ -46,6 +46,7 @@ describe("buildExecutiveSummary", () => {
     expect(summary.summary).toContain("game-ready foundation");
     expect(summary.strengths.length).toBeGreaterThan(0);
     expect(summary.nextSteps).toEqual(coaching);
+    expect(summary.terms[0]?.term).toContain("Hip-shoulder separation");
   });
 
   test("floors a poor swing score and surfaces the cleanup label", () => {
@@ -74,10 +75,8 @@ describe("buildExecutiveSummary", () => {
     expect(summary.score).toBe(40);
     expect(summary.label).toBe("Needs cleanup");
     expect(summary.issues.length).toBeGreaterThan(0);
-    expect(summary.nextSteps[0]).toEqual({
-      tone: "warn",
-      text: "hips leak early, which can flatten the sequence before the barrel turns loose",
-    });
+    expect(summary.nextSteps[0]?.tone).toBe("warn");
+    expect(summary.nextSteps[0]?.text).toContain("hips");
   });
 
   test("keeps the summary player-facing and free of internal report wording", () => {
@@ -85,8 +84,21 @@ describe("buildExecutiveSummary", () => {
       { tone: "warn", text: "Foot plant is early. Try a softer, controlled toe-tap load." },
     ]);
 
-    expect(summary.summary).toContain("Foot plant is early");
+    expect(summary.summary).toContain("front foot is landing early");
     expect(summary.summary).not.toMatch(/signal|evidence|diagnostic|proof surface/i);
-    expect(summary.nextSteps[0].text).toContain("Foot plant is early");
+    expect(summary.nextSteps[0].text).toContain("front foot is landing early");
+  });
+
+  test("rewrites jargon-heavy coaching into plain language", () => {
+    const summary = buildExecutiveSummary(makeMetrics(), [
+      {
+        tone: "warn",
+        text: "X-factor is very large — ensure you're not over-rotating hips and getting stuck behind the ball.",
+      },
+    ]);
+
+    expect(summary.nextSteps[0]?.text).toContain("Hip-shoulder separation (X-factor) is on the high side");
+    expect(summary.nextSteps[0]?.text).toContain("plain English");
+    expect(summary.terms.map((item) => item.term)).toContain("Hip-shoulder separation (X-factor)");
   });
 });

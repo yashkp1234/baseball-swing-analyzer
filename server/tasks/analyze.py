@@ -98,6 +98,7 @@ def run_analysis(job_id: str) -> None:
         from baseball_swing_analyzer.export_3d import generate_swing_3d_data_from_keypoints
 
         keypoints_seq = result.pop("_keypoints_seq")
+        viewer_segments = result.pop("_viewer_segments", [])
         phase_labels = result.get("phase_labels", [])
         fps = result.get("fps", 30.0)
         frame_data = generate_swing_3d_data_from_keypoints(
@@ -106,6 +107,15 @@ def run_analysis(job_id: str) -> None:
 
         frames_3d_json = json.dumps(frame_data, default=str)
         (out_dir / "frames_3d.json").write_text(frames_3d_json, encoding="utf-8")
+        for viewer_segment in viewer_segments:
+            segment_frame_data = generate_swing_3d_data_from_keypoints(
+                viewer_segment["keypoints_seq"],
+                viewer_segment["phase_labels"],
+                fps,
+                report=viewer_segment["report"],
+            )
+            filename = f"frames_3d_swing_{viewer_segment['swing_number']}.json"
+            (out_dir / filename).write_text(json.dumps(segment_frame_data, default=str), encoding="utf-8")
 
         logger.info(f"[Job {job_id[:8]}] All steps complete")
         db.update_job(

@@ -76,7 +76,7 @@ def test_static_report_uses_generic_copy_when_sport_unknown():
         "pose_confidence_mean": 0.8,
     })
 
-    assert any("through contact longer" in cue.lower() for cue in cues)
+    assert any("finish stays low" in cue.lower() for cue in cues)
     assert all("pitcher" not in cue.lower() for cue in cues)
     assert all("baseball" not in cue.lower() for cue in cues)
 

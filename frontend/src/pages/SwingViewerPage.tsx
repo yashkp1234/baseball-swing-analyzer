@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Pause, Play, RotateCcw } from "lucide-react";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { FixTogglePanel } from "@/components/FixTogglePanel";
@@ -31,6 +31,7 @@ function Shimmer({ className = "" }: { className?: string }) {
 
 export function SwingViewerPage() {
   const { jobId } = useParams<{ jobId: string }>();
+  const [searchParams] = useSearchParams();
   const [baseData, setBaseData] = useState<Swing3DData | null>(null);
   const [activeData, setActiveData] = useState<Swing3DData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -46,22 +47,28 @@ export function SwingViewerPage() {
   const [projectionPending, setProjectionPending] = useState(false);
   const [projectionError, setProjectionError] = useState<string | null>(null);
   const latestProjectionRequest = useRef(0);
+  const selectedSwing = useMemo(() => {
+    const rawValue = searchParams.get("swing");
+    if (!rawValue) return undefined;
+    const parsed = Number.parseInt(rawValue, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+  }, [searchParams]);
 
   useEffect(() => {
     if (!jobId) return;
-    getFrames3D(jobId)
+    getFrames3D(jobId, selectedSwing)
       .then((frames) => {
         setBaseData(frames);
         setActiveData(frames);
       })
       .catch((requestError: Error) => setError(requestError.message));
-  }, [jobId]);
+  }, [jobId, selectedSwing]);
 
   useEffect(() => {
     if (!jobId || !baseData) return;
     const requestId = ++latestProjectionRequest.current;
     setProjectionPending(true);
-    projectSwing(jobId, {})
+    projectSwing(jobId, {}, selectedSwing)
       .then((result) => {
         if (requestId !== latestProjectionRequest.current) return;
         setBaselineProjection(result.baseline);
@@ -76,7 +83,7 @@ export function SwingViewerPage() {
       .finally(() => {
         if (requestId === latestProjectionRequest.current) setProjectionPending(false);
       });
-  }, [baseData, jobId]);
+  }, [baseData, jobId, selectedSwing]);
 
   useEffect(() => {
     const totalFrames = activeData?.total_frames ?? 0;
@@ -110,7 +117,7 @@ export function SwingViewerPage() {
     setProjectionPending(true);
     setProjectionError(null);
     try {
-      const result = await projectSwing(jobId, { fix_id: "lower_half_timing" });
+      const result = await projectSwing(jobId, { fix_id: "lower_half_timing" }, selectedSwing);
       if (requestId !== latestProjectionRequest.current) return;
       setBaselineProjection(result.baseline);
       setProjection(result.projection);
@@ -123,8 +130,8 @@ export function SwingViewerPage() {
       setActiveData(baseData);
     } finally {
       if (requestId === latestProjectionRequest.current) setProjectionPending(false);
-    }
-  }, [baseData, jobId]);
+      }
+  }, [baseData, jobId, selectedSwing]);
 
   const displayedData = activeData ?? baseData;
   const activePhase = displayedData ? displayedData.phase_labels[currentFrame] ?? "idle" : "idle";

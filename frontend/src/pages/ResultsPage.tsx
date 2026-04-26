@@ -13,13 +13,13 @@ import { artifactUrl, getJobResults, getJobStatus, type SwingMetrics } from "@/l
 import { buildExecutiveSummary } from "@/lib/resultsSummary";
 
 const DISPLAY_METRICS: { key: keyof SwingMetrics; label: string }[] = [
-  { key: "x_factor_at_contact", label: "X-Factor" },
+  { key: "x_factor_at_contact", label: "Hip-Shoulder Separation" },
   { key: "hip_angle_at_contact", label: "Hip Angle" },
   { key: "shoulder_angle_at_contact", label: "Shoulder Angle" },
   { key: "spine_tilt_at_contact", label: "Spine Tilt" },
   { key: "left_knee_at_contact", label: "L Knee Flex" },
   { key: "right_knee_at_contact", label: "R Knee Flex" },
-  { key: "head_displacement_total", label: "Head Displace" },
+  { key: "head_displacement_total", label: "Head Movement" },
   { key: "wrist_peak_velocity_normalized", label: "Peak Wrist Vel (norm)" },
 ];
 
@@ -96,15 +96,15 @@ export function ResultsPage() {
         <div className="w-24" />
       </header>
 
-      <main className="max-w-7xl mx-auto px-4 py-6 space-y-8">
+      <main className="mx-auto max-w-[1680px] px-5 py-6 space-y-8 lg:px-8">
         <section
           aria-label="Executive summary and annotated video"
           className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(13,18,28,0.98),rgba(22,28,38,0.94))] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"
         >
-          <div className="grid gap-0 xl:grid-cols-[minmax(0,1.2fr)_minmax(320px,0.8fr)]">
+          <div className="grid gap-0 xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.95fr)]">
             <ExecutiveSummaryHero summary={executiveSummary} embedded />
 
-            <div className="border-t border-white/8 bg-[rgba(7,10,16,0.34)] p-4 lg:p-5 xl:border-l xl:border-t-0">
+            <div className="border-t border-white/8 bg-[rgba(7,10,16,0.34)] p-5 lg:p-6 xl:border-l xl:border-t-0">
               <CardTitle className="mb-2 px-1">Annotated Video</CardTitle>
               <p className="mb-4 max-w-3xl px-1 text-sm leading-6 text-[var(--color-text-dim)]">
                 Review the swing clip next to the coaching summary.
