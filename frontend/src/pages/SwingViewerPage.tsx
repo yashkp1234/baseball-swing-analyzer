@@ -112,6 +112,7 @@ export function SwingViewerPage() {
   useEffect(() => {
     if (!jobId || !baseData) return;
     const requestId = ++latestProjectionRequest.current;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setProjectionPending(true);
     projectSwing(jobId, { x_factor_delta_deg: 0, head_stability_delta_norm: 0 })
       .then((result) => {
@@ -146,6 +147,7 @@ export function SwingViewerPage() {
 
   useEffect(() => {
     if (!activeData) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCurrentFrame((frame) => Math.min(frame, Math.max(activeData.total_frames - 1, 0)));
   }, [activeData]);
 
@@ -407,21 +409,21 @@ export function SwingViewerPage() {
             ) : null}
 
             {activeTab === "whatif" ? (
-              <ErrorBoundary>
-                <Panel title="What If You Fixed This?" subtitle="Release a slider to project a new swing path and outcome" accent="#FFD700">
-                  <WhatIfSimulator
-                    baselineXFactor={Number(displayedData.metrics.x_factor_at_contact ?? 0)}
-                    baselineHeadDisplacementPx={Number(displayedData.metrics.head_displacement_total ?? 0)}
-                    sportProfile={sportProfile}
-                    baseline={baselineProjection}
-                    projection={projection}
-                    pending={projectionPending}
-                    error={projectionError}
-                    resetToken={whatIfResetToken}
-                    onApply={handleProjection}
-                    onReset={handleResetProjection}
-                  />
-                </Panel>
+      <ErrorBoundary>
+        <Panel title="What If You Fixed This?" subtitle="Release a slider to project a new swing path and outcome" accent="#FFD700">
+          <WhatIfSimulator
+            key={whatIfResetToken}
+            baselineXFactor={Number(displayedData.metrics.x_factor_at_contact ?? 0)}
+            baselineHeadDisplacementPx={Number(displayedData.metrics.head_displacement_total ?? 0)}
+            sportProfile={sportProfile}
+            baseline={baselineProjection}
+            projection={projection}
+            pending={projectionPending}
+            error={projectionError}
+            onApply={handleProjection}
+            onReset={handleResetProjection}
+          />
+        </Panel>
               </ErrorBoundary>
             ) : null}
           </div>

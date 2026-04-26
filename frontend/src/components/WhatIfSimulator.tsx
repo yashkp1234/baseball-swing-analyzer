@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { LoaderCircle, RotateCcw } from "lucide-react";
 import type { ProjectionSummary, SportProfile } from "@/lib/api";
 
@@ -70,7 +70,6 @@ interface Props {
   projection: ProjectionSummary | null;
   pending: boolean;
   error: string | null;
-  resetToken: number;
   onApply: (input: ProjectionInput) => void;
   onReset: () => void;
 }
@@ -87,15 +86,10 @@ export function WhatIfSimulator({
   projection,
   pending,
   error,
-  resetToken,
   onApply,
   onReset,
 }: Props) {
   const [draft, setDraft] = useState<ProjectionInput>({ x_factor_delta_deg: 0, head_stability_delta_norm: 0 });
-
-  useEffect(() => {
-    setDraft({ x_factor_delta_deg: 0, head_stability_delta_norm: 0 });
-  }, [resetToken]);
 
   const commit = () => onApply(draft);
   const activeProjection = projection ?? baseline;

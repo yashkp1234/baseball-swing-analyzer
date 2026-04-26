@@ -19,16 +19,21 @@ export function AnalysisSummary({ analysis }: Props) {
   ];
 
   return (
-    <div className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-4">
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold">Analysis Summary</h3>
-        <span className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
+    <section className="rounded-[24px] border border-[var(--color-border)] bg-[var(--color-surface)]/86 p-5">
+      <div className="mb-4 flex items-start justify-between gap-4">
+        <div>
+          <h3 className="text-sm font-semibold text-[var(--color-text)]">Analysis details</h3>
+          <p className="mt-1 text-sm leading-6 text-[var(--color-text-dim)]">
+            Processing transparency for advanced review.
+          </p>
+        </div>
+        <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-2.5 py-1 text-[10px] uppercase tracking-[0.16em] text-[var(--color-text-dim)]">
           {analysis.sampling_mode}
         </span>
       </div>
       <div className="grid grid-cols-2 gap-3">
         {items.map((item) => (
-          <div key={item.label} className="rounded-lg bg-[var(--color-surface-2)] px-3 py-2">
+          <div key={item.label} className="rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-2)]/75 px-3 py-2.5">
             <div className="text-[10px] uppercase tracking-wider text-[var(--color-text-dim)]">
               {item.label}
             </div>
@@ -36,12 +41,12 @@ export function AnalysisSummary({ analysis }: Props) {
           </div>
         ))}
       </div>
-      <div className="mt-3 flex flex-wrap gap-4 text-xs text-[var(--color-text-dim)]">
+      <div className="mt-4 flex flex-wrap gap-4 text-xs text-[var(--color-text-dim)]">
         <span>Source: {analysis.source_frames} frames @ {analysis.source_fps.toFixed(1)} fps</span>
         {typeof analysis.pose_inference_duration_ms === "number" && (
           <span>Pose: {msToSeconds(analysis.pose_inference_duration_ms)}</span>
         )}
       </div>
-    </div>
+    </section>
   );
 }
