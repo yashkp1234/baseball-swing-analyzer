@@ -41,6 +41,8 @@ export interface SwingMetrics {
   frames: number;
   fps: number;
   phase_labels: string[];
+  swing_segments?: SwingSegment[];
+  primary_swing_segment?: SwingSegment | null;
   flags: {
     handedness: string;
     front_shoulder_closed_load: boolean;
@@ -51,11 +53,25 @@ export interface SwingMetrics {
   };
 }
 
+export interface SwingSegment {
+  start_frame: number;
+  end_frame: number;
+  contact_frame: number;
+  duration_s: number;
+  confidence: number;
+}
+
 export interface Frame3D {
   keypoints: number[][];
   keypoint_names: string[];
   skeleton: [number, number][];
   phase: string;
+  bat?: {
+    handle: number[];
+    barrel: number[];
+    confidence: number;
+    estimate_basis: "wrist_forearm_proxy";
+  };
   efficiency: number;
   velocities: Record<string, number>;
   velocity_vectors?: Record<string, number[]>;
@@ -77,6 +93,14 @@ export interface Swing3DData {
   stride_plant_frame: number | null;
   phase_labels: string[];
   frames: Frame3D[];
+  swing_segments?: SwingSegment[];
+  primary_swing_segment?: SwingSegment | null;
+  ball?: {
+    contact_frame: number;
+    contact_position: number[];
+    confidence: number;
+    estimate_basis: "contact_frame_barrel_proxy";
+  };
   kinetic_chain_scores: { hip_to_shoulder: number; shoulder_to_hand: number; overall: number };
   energy_loss_events: EnergyLossEvent[];
   metrics: Record<string, unknown>;

@@ -92,6 +92,7 @@ def _build_3d_data(
             "keypoint_names": COCO_NAMES,
             "skeleton": COCO_SKELETON,
             "phase": phase_labels[t] if t < len(phase_labels) else "idle",
+            "bat": _estimate_bat(normed[t]),
             "efficiency": _frame_efficiency(speeds, t),
             "velocities": {
                 name: round(float(speeds[name][t]), 2)
@@ -113,6 +114,9 @@ def _build_3d_data(
         "stride_plant_frame": stride_frame,
         "phase_labels": phase_labels,
         "frames": frames_list,
+        "swing_segments": report.get("swing_segments", []),
+        "primary_swing_segment": report.get("primary_swing_segment"),
+        "ball": _estimate_ball(frames_list, contact_idx),
         "kinetic_chain_scores": chain_scores,
         "energy_loss_events": energy_events,
         "depth_disclaimer": "Depth is estimated from 2D heuristics — quantitative depth metrics are not available. View this as a stylized rendering of the 2D pose.",
@@ -122,6 +126,41 @@ def _build_3d_data(
         },
         "skeleton": COCO_SKELETON,
         "keypoint_names": COCO_NAMES,
+    }
+
+
+def _estimate_bat(frame_points: NDArray[np.float32]) -> dict:
+    """Estimate bat handle and barrel from wrist/forearm pose points."""
+    left_wrist = frame_points[9]
+    right_wrist = frame_points[10]
+    left_elbow = frame_points[7]
+    right_elbow = frame_points[8]
+    handle = (left_wrist + right_wrist) / 2.0
+    hand_axis = right_wrist - left_wrist
+    forearm_axis = ((left_wrist - left_elbow) + (right_wrist - right_elbow)) / 2.0
+    direction = hand_axis + forearm_axis
+    length = float(np.linalg.norm(direction))
+    if not np.isfinite(length) or length < 1e-6:
+        direction = np.array([0.45, 0.0, 0.0], dtype=np.float32)
+        length = float(np.linalg.norm(direction))
+    unit = direction / length
+    barrel = handle + unit * 0.55
+    return {
+        "handle": [round(float(v), 4) for v in handle],
+        "barrel": [round(float(v), 4) for v in barrel],
+        "confidence": 0.45,
+        "estimate_basis": "wrist_forearm_proxy",
+    }
+
+
+def _estimate_ball(frames_list: list[dict], contact_idx: int) -> dict:
+    bat = frames_list[contact_idx].get("bat") if frames_list and 0 <= contact_idx < len(frames_list) else None
+    position = bat["barrel"] if bat else [0.0, 0.0, 0.0]
+    return {
+        "contact_frame": contact_idx,
+        "contact_position": position,
+        "confidence": 0.35,
+        "estimate_basis": "contact_frame_barrel_proxy",
     }
 
 
@@ -163,6 +202,9 @@ def _empty_result(fps: float) -> dict:
         "stride_plant_frame": None,
         "phase_labels": [],
         "frames": [],
+        "swing_segments": [],
+        "primary_swing_segment": None,
+        "ball": {"contact_frame": 0, "contact_position": [0.0, 0.0, 0.0], "confidence": 0.0, "estimate_basis": "contact_frame_barrel_proxy"},
         "kinetic_chain_scores": {"hip_to_shoulder": {"lag_frames": 0, "direction": "synced"}, "shoulder_to_hand": {"lag_frames": 0, "direction": "synced"}},
         "energy_loss_events": [],
         "metrics": {},
