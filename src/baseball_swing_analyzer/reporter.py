@@ -15,18 +15,53 @@ def write_metrics_json(
     output_path.write_text(json.dumps(metrics, indent=2, default=str), encoding="utf-8")
 
 
+_SUMMARY_SKIP_KEYS = {"phase_labels", "_keypoints_seq", "_viewer_segments"}
+
+
+def _format_value(value: object) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, float):
+        if value != value:  # NaN
+            return "n/a"
+        return f"{value:.2f}"
+    if isinstance(value, bool):
+        return "yes" if value else "no"
+    return str(value)
+
+
 def summarize_metrics(metrics: dict) -> str:
-    """Return a human-readable summary table string."""
+    """Return a human-readable summary string for the LLM prompt."""
     lines: list[str] = ["=" * 40, "SWING METRICS", "=" * 40]
     for name, value in metrics.items():
-        if name == "flags" and isinstance(value, dict):
-            lines.append(f"  {name:30s} {str(value):10s}")
-        elif name == "phase_labels":
+        if name in _SUMMARY_SKIP_KEYS:
             continue
-        elif isinstance(value, float):
-            lines.append(f"  {name:30s} {value:10.2f}")
-        else:
-            lines.append(f"  {name:30s} {str(value):10s}")
+        if name == "kinetic_chain" and isinstance(value, dict):
+            lines.append("  kinetic_chain:")
+            for sub_name, sub_value in value.items():
+                lines.append(f"    {sub_name:34s} {_format_value(sub_value)}")
+            continue
+        if name == "energy_loss_events" and isinstance(value, list):
+            if not value:
+                lines.append(f"  {name:30s} none")
+            else:
+                lines.append(f"  {name:30s} {len(value)} event(s)")
+                for event in value[:5]:
+                    frame = event.get("frame", "?")
+                    etype = event.get("type", "?")
+                    mag = event.get("magnitude_pct", "?")
+                    joint = event.get("joint", "?")
+                    lines.append(f"    frame {frame} {etype} ({joint}, -{mag}%)")
+            continue
+        if name == "flags" and isinstance(value, dict):
+            lines.append("  flags:")
+            for flag_name, flag_value in value.items():
+                lines.append(f"    {flag_name:34s} {_format_value(flag_value)}")
+            continue
+        if isinstance(value, dict):
+            lines.append(f"  {name:30s} {value}")
+            continue
+        lines.append(f"  {name:30s} {_format_value(value)}")
     lines.append("=" * 40)
     return "\n".join(lines)
 
@@ -35,18 +70,24 @@ def build_report(
     phase_labels: list[str],
     keypoints_seq: NDArray[np.floating],
     fps: float,
+    handedness: str = "right",
 ) -> dict:
     """Compute all Phase 1 metrics from labels + pose and return a flat dict."""
-    from .energy import compute_kinetic_chain_scores
+    from .energy import compute_kinetic_chain_scores, detect_energy_loss_events
     from .metrics import (
+        attack_angle_deg,
+        clip_metric,
         head_displacement,
         hip_angle,
         knee_angle,
         lateral_spine_tilt,
+        peak_pelvis_angular_velocity_deg_s,
+        peak_torso_angular_velocity_deg_s,
         phase_durations,
         shoulder_angle,
-        clip_metric,
+        stride_direction_deg,
         stride_foot_plant_frame,
+        stride_length_normalized,
         torso_length_px,
         wrist_velocity,
         x_factor,
@@ -68,13 +109,20 @@ def build_report(
     active_start_idx = _time_to_contact_start_frame(phase_labels, contact_idx, fps)
     head_drop_pct, head_drift_pct = _split_head_movement(keypoints_seq, torso)
     chain_scores = compute_kinetic_chain_scores(keypoints_seq[:, :, :3], fps)
+    energy_events = detect_energy_loss_events(keypoints_seq[:, :, :3], fps, phase_labels)
     view_type, view_confidence = _infer_view(keypoints_seq, torso)
     hip_to_shoulder = chain_scores.get("hip_to_shoulder", {})
     shoulder_to_hand = chain_scores.get("shoulder_to_hand", {})
+    plant_frame = stride_foot_plant_frame(keypoints_seq)
+    attack_angle = attack_angle_deg(keypoints_seq, contact_idx)
+    stride_length = stride_length_normalized(keypoints_seq, plant_frame, handedness)
+    stride_direction = stride_direction_deg(keypoints_seq, plant_frame, handedness)
+    peak_pelvis_av = peak_pelvis_angular_velocity_deg_s(keypoints_seq, fps)
+    peak_torso_av = peak_torso_angular_velocity_deg_s(keypoints_seq, fps)
 
     report: dict = {
         "phase_durations": durations,
-        "stride_plant_frame": stride_foot_plant_frame(keypoints_seq),
+        "stride_plant_frame": plant_frame,
         "contact_frame": contact_idx,
         "hip_angle_at_contact": float(hip_angle(kp_contact)),
         "shoulder_angle_at_contact": float(shoulder_angle(kp_contact)),
@@ -89,6 +137,11 @@ def build_report(
         "time_to_contact_s": float(max(contact_idx - active_start_idx, 0) / max(fps, 1.0)),
         "head_drop_pct": float(clip_metric(head_drop_pct, 0.0, 100.0)),
         "head_drift_pct": float(clip_metric(head_drift_pct, 0.0, 100.0)),
+        "attack_angle_deg": _safe_float(attack_angle),
+        "stride_length_normalized": _safe_float(stride_length),
+        "stride_direction_deg": _safe_float(stride_direction),
+        "peak_pelvis_angular_velocity_deg_s": _safe_float(peak_pelvis_av),
+        "peak_torso_angular_velocity_deg_s": _safe_float(peak_torso_av),
         "kinetic_chain": {
             "hip_to_shoulder_lag_frames": int(hip_to_shoulder.get("lag_frames", 0)),
             "hip_to_shoulder_direction": str(hip_to_shoulder.get("direction", "synced")),
@@ -99,6 +152,7 @@ def build_report(
                 and shoulder_to_hand.get("direction") == "leads"
             ),
         },
+        "energy_loss_events": energy_events,
         "view_type": view_type,
         "view_confidence": view_confidence,
     }
@@ -117,6 +171,18 @@ def build_report(
     report["fps"] = fps
     report["phase_labels"] = phase_labels
     return report
+
+
+def _safe_float(value: object) -> float | None:
+    if value is None:
+        return None
+    try:
+        f = float(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return None
+    if f != f:  # NaN
+        return None
+    return f
 
 
 def _time_to_contact_start_frame(phase_labels: list[str], contact_idx: int, fps: float) -> int:

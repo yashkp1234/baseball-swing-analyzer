@@ -361,7 +361,7 @@ def _build_window_analysis(
         fps=analysis_fps,
         forced_contact_frame=events.contact_frame,
     )
-    report = build_report(phase_labels, keypoints_seq, analysis_fps)
+    report = build_report(phase_labels, keypoints_seq, analysis_fps, handedness=handedness)
     report["flags"] = generate_qualitative_flags(
         keypoints_seq,
         phase_labels,
@@ -583,7 +583,7 @@ def analyze_swing(
         fps=analysis_fps,
         forced_contact_frame=events.contact_frame,
     )
-    report = build_report(phase_labels, keypoints_for_metrics, analysis_fps)
+    report = build_report(phase_labels, keypoints_for_metrics, analysis_fps, handedness=handedness)
     report["flags"] = generate_qualitative_flags(
         keypoints_for_metrics,
         phase_labels,
@@ -614,7 +614,7 @@ def analyze_swing(
                 fps=analysis_fps,
                 forced_contact_frame=per_swing_events.contact_frame,
             )
-            per_swing_report = build_report(per_swing_labels, per_swing_keypoints, analysis_fps)
+            per_swing_report = build_report(per_swing_labels, per_swing_keypoints, analysis_fps, handedness=handedness)
             per_swing_report["flags"] = generate_qualitative_flags(
                 per_swing_keypoints,
                 per_swing_labels,

@@ -25,6 +25,8 @@ ANGLE_SENSITIVE_METRICS = {
     "peak_separation_deg",
     "x_factor_at_contact",
     "lateral_spine_tilt_at_contact",
+    "peak_pelvis_angular_velocity_deg_s",
+    "peak_torso_angular_velocity_deg_s",
 }
 
 
@@ -199,6 +201,114 @@ RULES: list[tuple[str, MetricRule]] = [
             metric="lateral_spine_tilt_at_contact",
         ),
     ),
+    (
+        "time_to_contact_s",
+        lambda v, metrics: None
+        if 0.13 <= v <= 0.20
+        else _cue(
+            "Quick but rushed swing",
+            "Time to contact is very short, which usually means the body is jumping at the ball before the lower half is loaded.",
+            "Pros sit around 0.14 to 0.18 seconds. Going much shorter often comes from the hands starting before the stride lands.",
+            "Soft-toss with stride pause: gather, plant, hold for a beat, then turn through.",
+            metric="time_to_contact_s",
+        )
+        if v < 0.13
+        else _cue(
+            "Slow trigger to contact",
+            "Time to contact is long, which shrinks the window to read the pitch.",
+            "Pros sit around 0.14 to 0.18 seconds. A longer move often means a long hand path or a late lower-half turn.",
+            "Short-path tee work: launch the knob to the ball and feel the barrel turn tight to the body.",
+            metric="time_to_contact_s",
+        ),
+    ),
+    (
+        "head_drop_pct",
+        lambda v, metrics: None
+        if v <= 12.0
+        else _cue(
+            "Head dropping through the swing",
+            "The head is sinking a lot from load to contact, which makes the ball harder to track.",
+            "Skilled hitters drop the head a little but stay consistent. A big drop usually means the back side is collapsing.",
+            "Posture drill: swing with a ball balanced on the head, or freeze at contact and check that the eyes are still over the zone.",
+            metric="head_drop_pct",
+        ),
+    ),
+    (
+        "head_drift_pct",
+        lambda v, metrics: None
+        if v <= 8.0
+        else _cue(
+            "Head drifting toward the pitcher",
+            "The head is sliding forward during the swing, which moves the eyes and changes contact depth.",
+            "Forward head movement is the worst kind of head motion because it makes the ball appear to move differently every swing.",
+            "No-stride tee swings: take the stride out, rotate around a stable head, then add the stride back gradually.",
+            metric="head_drift_pct",
+        ),
+    ),
+    (
+        "stride_length_normalized",
+        lambda v, metrics: None
+        if 1.5 <= v <= 5.0
+        else _cue(
+            "Short stride",
+            "Stride length looks short, which can leave the lower half disconnected from the swing.",
+            "A small stride usually means weak forward momentum, so the swing has to come from the arms.",
+            "Walk-up BP: take a slow step into each pitch to feel the lower half lead the move.",
+            metric="stride_length_normalized",
+        )
+        if v < 1.5
+        else _cue(
+            "Long stride",
+            "Stride length looks long, which can drop the head and delay the start of rotation.",
+            "An overly long stride sinks the center of mass and forces the body to climb out of the move before turning.",
+            "Stride-band drill: take a normal stride against light resistance to feel a controlled landing.",
+            metric="stride_length_normalized",
+        ),
+    ),
+    (
+        "attack_angle_deg",
+        lambda v, metrics: None
+        if 5 <= v <= 20
+        else _cue(
+            "Flat or downward attack angle",
+            "Bat-path angle at contact looks flat or downward, which produces ground balls and weak fly balls.",
+            "Modern data shows ideal attack angle is +5° to +20° (a slight uppercut to match the pitch plane).",
+            "High-tee work: hit the top half of a tee placed at chest height to feel the barrel staying through the ball, not chopping down.",
+            metric="attack_angle_deg",
+        )
+        if v < 5
+        else _cue(
+            "Steep uppercut",
+            "Bat path looks steep upward at contact, which can cause pop-ups and swings under fastballs.",
+            "Above ~20° attack angle, the barrel only matches the pitch plane in a narrow window — easier to whiff.",
+            "Low-tee work: hit a low pitch flush without scooping under it. Feel the hands stay on top of the ball longer.",
+            metric="attack_angle_deg",
+        ),
+    ),
+    (
+        "peak_pelvis_angular_velocity_deg_s",
+        lambda v, metrics: None
+        if v >= 400
+        else _cue(
+            "Slow pelvis turn",
+            "Peak pelvis rotation speed is below the high-school benchmark.",
+            "HS pros average ~420 deg/s, college ~480, MLB ~540. A slow pelvis caps how fast every downstream segment can move.",
+            "Med-ball rotational throws: side toss for explosive hip turn; cue the back hip pulling the chest through.",
+            metric="peak_pelvis_angular_velocity_deg_s",
+        ),
+    ),
+    (
+        "peak_torso_angular_velocity_deg_s",
+        lambda v, metrics: None
+        if v >= 600
+        else _cue(
+            "Slow torso turn",
+            "Peak torso rotation speed is below the high-school benchmark.",
+            "HS averages ~510 deg/s, college ~620, MLB ~720. A slow torso means the chest never whips after the hips.",
+            "Stretch-and-fire drill: pause at peak separation, then rip the chest through to feel the upper body accelerate after the hips.",
+            metric="peak_torso_angular_velocity_deg_s",
+        ),
+    ),
 ]
 
 
@@ -281,6 +391,42 @@ def generate_static_report(metrics: dict[str, Any]) -> list[dict[str, str]]:
     view_type = str(metrics.get("view_type", "unknown")).lower()
     view_confidence = float(metrics.get("view_confidence", 0.0) or 0.0)
     angle_metrics_safe = view_type in {"frontal", "back"} and view_confidence >= 0.6
+
+    chain = metrics.get("kinetic_chain")
+    if isinstance(chain, dict):
+        hs_dir = str(chain.get("hip_to_shoulder_direction", "synced"))
+        sh_dir = str(chain.get("shoulder_to_hand_direction", "synced"))
+        if hs_dir == "trails":
+            cues.append(_cue(
+                "Out-of-sequence: torso leads hips",
+                "The torso is firing before the hips, so there is no stretch left to whip the bat through.",
+                "Kinetic sequence should be hips, then torso, then arms, then hands. When the chest goes first, the lower half has nothing to whip around and bat speed leaks.",
+                "Hook 'Em drill: take the back hand off at contact and pull the knob to the ball with the back hip, forcing the lower half to lead.",
+                metric="kinetic_chain.hip_to_shoulder_direction",
+            ))
+        if sh_dir == "trails":
+            cues.append(_cue(
+                "Out-of-sequence: hands lead the torso",
+                "The hands are starting before the chest finishes turning, which usually shows up as bat drag and a long swing.",
+                "When the hands beat the torso, the barrel cannot ride the body's rotation and has to chase the ball with arm strength.",
+                "Connection-ball turns: pin a towel under the lead arm and rotate the chest through contact without dropping it.",
+                metric="kinetic_chain.shoulder_to_hand_direction",
+            ))
+
+    energy_events = metrics.get("energy_loss_events")
+    if isinstance(energy_events, list):
+        for event in energy_events[:2]:
+            etype = str(event.get("type", ""))
+            mag = float(event.get("magnitude_pct", 0.0) or 0.0)
+            if etype == "early_opening" and mag >= 30.0:
+                cues.append(_cue(
+                    "Hips bleed energy before contact",
+                    "Hip rotation slows down well before contact, which usually means the hips opened too early and have nothing left to give.",
+                    "Once the pelvis decelerates, the only way to get the bat through is to push with the arms — slower and less consistent.",
+                    "Pillar-turn drill: land the stride and feel the hips keep accelerating into the chest, not stalling at heel plant.",
+                    metric="energy_loss_events.early_opening",
+                ))
+                break
 
     for name, rule in RULES:
         if name in ANGLE_SENSITIVE_METRICS and not angle_metrics_safe:

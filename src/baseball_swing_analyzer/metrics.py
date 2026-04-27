@@ -208,3 +208,105 @@ def phase_durations(phase_labels: list[str]) -> dict[str, int]:
 
 def clip_metric(value: float, lower: float, upper: float) -> float:
     return float(max(lower, min(upper, value)))
+
+
+def attack_angle_deg(keypoints_seq: np.ndarray, contact_idx: int, window: int = 3) -> float:
+    """Approximate attack angle from wrist-midpoint trajectory near contact.
+
+    We don't track the bat directly. The wrist midpoint over the last few
+    frames before contact is the best pose-only proxy for bat-path angle.
+
+    Returns degrees above horizontal (positive = upward swing). Sign flipped
+    because image y increases downward.
+    """
+    seq = np.asarray(keypoints_seq, dtype=float)
+    T = seq.shape[0]
+    if T < 2 or window < 2:
+        return float("nan")
+    end = max(1, min(contact_idx, T - 1))
+    start = max(0, end - window + 1)
+    if end - start < 1:
+        return float("nan")
+    wrist_mid = (seq[start:end + 1, COCO_LW, :2] + seq[start:end + 1, COCO_RW, :2]) / 2
+    if len(wrist_mid) < 2:
+        return float("nan")
+    dx = float(wrist_mid[-1, 0] - wrist_mid[0, 0])
+    dy = float(wrist_mid[-1, 1] - wrist_mid[0, 1])
+    if abs(dx) < 1e-3 and abs(dy) < 1e-3:
+        return 0.0
+    angle = np.degrees(np.arctan2(-dy, abs(dx) if dx != 0 else 1e-3))
+    return float(angle)
+
+
+def stride_length_normalized(
+    keypoints_seq: np.ndarray,
+    plant_frame: int | None,
+    handedness: str,
+) -> float:
+    """Front-ankle horizontal displacement from frame 0 to plant, in hip-widths.
+
+    Returns NaN if plant_frame missing or hip width too small to trust.
+    """
+    if plant_frame is None:
+        return float("nan")
+    seq = np.asarray(keypoints_seq, dtype=float)
+    T = seq.shape[0]
+    if T < 2 or plant_frame <= 0 or plant_frame >= T:
+        return float("nan")
+    front_idx = COCO_LA if str(handedness).lower() == "right" else COCO_RA
+    start_x = float(seq[0, front_idx, 0])
+    plant_x = float(seq[plant_frame, front_idx, 0])
+    hip_width = float(np.linalg.norm(seq[0, COCO_LH, :2] - seq[0, COCO_RH, :2]))
+    if hip_width < 5.0:
+        return float("nan")
+    return float(abs(plant_x - start_x) / hip_width)
+
+
+def stride_direction_deg(
+    keypoints_seq: np.ndarray,
+    plant_frame: int | None,
+    handedness: str,
+) -> float:
+    """Angle of front-foot stride vector in image plane, degrees from horizontal.
+
+    Image plane only, so interpretation requires a frontal/back view. Positive
+    = stride goes upward in the image (toward camera-far side).
+    """
+    if plant_frame is None:
+        return float("nan")
+    seq = np.asarray(keypoints_seq, dtype=float)
+    T = seq.shape[0]
+    if T < 2 or plant_frame <= 0 or plant_frame >= T:
+        return float("nan")
+    front_idx = COCO_LA if str(handedness).lower() == "right" else COCO_RA
+    dx = float(seq[plant_frame, front_idx, 0] - seq[0, front_idx, 0])
+    dy = float(seq[plant_frame, front_idx, 1] - seq[0, front_idx, 1])
+    if abs(dx) < 1e-3 and abs(dy) < 1e-3:
+        return 0.0
+    return float(np.degrees(np.arctan2(-dy, dx if dx != 0 else 1e-3)))
+
+
+def _peak_angular_velocity(angles: np.ndarray, fps: float) -> float:
+    angles = np.asarray(angles, dtype=float)
+    valid = angles[~np.isnan(angles)]
+    if len(valid) < 3:
+        return float("nan")
+    unwrapped = np.degrees(np.unwrap(np.radians(angles)))
+    diffs = np.diff(unwrapped) * float(fps)
+    if len(diffs) == 0:
+        return float("nan")
+    return float(np.nanmax(np.abs(diffs)))
+
+
+def peak_pelvis_angular_velocity_deg_s(keypoints_seq: np.ndarray, fps: float) -> float:
+    """Peak |d(hip_angle)/dt| in deg/s. Angle-sensitive — frontal/back view only."""
+    seq = np.asarray(keypoints_seq, dtype=float)
+    angles = np.array([hip_angle(frame) for frame in seq])
+    return _peak_angular_velocity(angles, fps)
+
+
+def peak_torso_angular_velocity_deg_s(keypoints_seq: np.ndarray, fps: float) -> float:
+    """Peak |d(shoulder_angle)/dt| in deg/s. Angle-sensitive — frontal/back view only."""
+    seq = np.asarray(keypoints_seq, dtype=float)
+    angles = np.array([shoulder_angle(frame) for frame in seq])
+    return _peak_angular_velocity(angles, fps)
