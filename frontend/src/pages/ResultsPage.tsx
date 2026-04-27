@@ -144,7 +144,7 @@ export function ResultsPage() {
                   className="flex items-center justify-center gap-2 rounded-[20px] border border-[var(--color-accent)]/40 bg-[var(--color-accent)]/10 px-6 py-4 text-sm font-semibold text-[var(--color-accent)] transition hover:bg-[var(--color-accent)]/18"
                 >
                   <Box className="h-5 w-5" />
-                  Open Swing Breakdown
+                  See Swing Breakdown
                 </Link>
               </div>
             </div>
