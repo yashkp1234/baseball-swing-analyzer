@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router-dom";
 import { ArrowLeft, Pause, Play } from "lucide-react";
+import { AnimatedSwingReplay } from "@/components/AnimatedSwingReplay";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { HipShoulderDiagram } from "@/components/HipShoulderDiagram";
 import { PhaseEnergyChart } from "@/components/PhaseEnergyChart";
 import { PhaseTimeline } from "@/components/PhaseTimeline";
 import { WhatIfSimulator } from "@/components/WhatIfSimulator";
@@ -10,7 +10,8 @@ import { getFrames3D } from "@/lib/api";
 import type { SwingMetrics, Swing3DData } from "@/lib/api";
 import { PHASE_LABELS } from "@/lib/metrics";
 
-const SPEEDS = [0.25, 0.5, 1];
+export const PLAYBACK_SPEEDS = [0.25, 0.5, 1] as const;
+export const DEFAULT_PLAYBACK_SPEED = PLAYBACK_SPEEDS[0];
 
 function Shimmer({ className = "" }: { className?: string }) {
   return (
@@ -43,7 +44,7 @@ export function SwingViewerPage() {
   const [data, setData] = useState<Swing3DData | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [currentFrame, setCurrentFrame] = useState(0);
-  const [speed, setSpeed] = useState(1);
+  const [speed, setSpeed] = useState<number>(DEFAULT_PLAYBACK_SPEED);
   const [playing, setPlaying] = useState(true);
 
   const selectedSwing = useMemo(() => {
@@ -132,7 +133,7 @@ export function SwingViewerPage() {
               <div>
                 <h2 className="text-base font-semibold text-[var(--color-text)]">What did your body do?</h2>
                 <p className="mt-1 text-sm leading-6 text-[var(--color-text-dim)]">
-                  This top-down view shows how far the hips and shoulders turned as the swing moved toward contact.
+                  Start with the actual body replay. It shows the move frame by frame, with the recent path left behind so you can read how the swing really traveled.
                 </p>
               </div>
               <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text-dim)]">
@@ -140,11 +141,7 @@ export function SwingViewerPage() {
               </div>
             </div>
             <div className="mt-5 flex items-center justify-center">
-              <HipShoulderDiagram
-                frames={data.frames}
-                currentFrame={currentFrame}
-                contactFrame={data.contact_frame}
-              />
+              <AnimatedSwingReplay frames={data.frames} currentFrame={currentFrame} contactFrame={data.contact_frame} />
             </div>
           </section>
 
@@ -156,11 +153,7 @@ export function SwingViewerPage() {
               </p>
             </div>
             <div className="mt-5">
-              <PhaseEnergyChart
-                frames={data.frames}
-                phaseLabels={data.phase_labels}
-                energyLossEvents={data.energy_loss_events}
-              />
+              <PhaseEnergyChart frames={data.frames} phaseLabels={data.phase_labels} energyLossEvents={data.energy_loss_events} />
             </div>
           </section>
 
@@ -178,6 +171,9 @@ export function SwingViewerPage() {
               <p className="mt-1 text-sm leading-6 text-[var(--color-text-dim)]">
                 Frame {currentFrame + 1} of {data.total_frames} {currentFrame === data.contact_frame ? "· Contact" : ""}
               </p>
+              <p className="mt-1 text-sm leading-6 text-[var(--color-text-dim)]">
+                Playback starts slow so you can inspect the move without racing the frames.
+              </p>
             </div>
             <div className="flex items-center gap-3">
               <button
@@ -189,7 +185,7 @@ export function SwingViewerPage() {
                 {playing ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
               </button>
               <div className="flex items-center gap-1 rounded-lg bg-[var(--color-surface-2)] p-1">
-                {SPEEDS.map((value) => (
+                {PLAYBACK_SPEEDS.map((value) => (
                   <button
                     key={value}
                     type="button"

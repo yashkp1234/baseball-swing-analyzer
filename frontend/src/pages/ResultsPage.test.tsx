@@ -66,6 +66,8 @@ const results: JobResults = {
   sport_profile: null,
   coaching: [{ tone: "info", text: "Stay closed longer into launch." }],
   frames_3d_url: "/api/jobs/job-123/artifacts/frames_3d.json",
+  analysis_version: "2026-04-swing-redesign-v1",
+  is_current_analysis: true,
 };
 
 describe("ResultsPage", () => {
@@ -173,6 +175,32 @@ describe("ResultsPage", () => {
 
     expect(html).toContain("Swing 1");
     expect(html).toContain("Swing 2");
+  });
+
+  test("surfaces stale or low-confidence analysis warnings above the summary", () => {
+    mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({
+      data: {
+        ...results,
+        is_current_analysis: false,
+        analysis_version: "2026-03-legacy",
+        metrics: {
+          ...metrics,
+          measurement_reliability: "low",
+        },
+      },
+    } as never);
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/results/job-123"]}>
+        <Routes>
+          <Route path="/results/:jobId" element={<ResultsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain("older analysis pass");
+    expect(html).toContain("2026-03-legacy");
+    expect(html).toContain("Pose confidence is low on this clip");
   });
 });
 

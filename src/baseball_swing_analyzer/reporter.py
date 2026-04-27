@@ -44,6 +44,7 @@ def build_report(
         lateral_spine_tilt,
         phase_durations,
         shoulder_angle,
+        clip_metric,
         stride_foot_plant_frame,
         torso_length_px,
         wrist_velocity,
@@ -74,8 +75,10 @@ def build_report(
     report["wrist_peak_velocity_px_s"] = float(vel.max())
     torso = torso_length_px(keypoints_seq)
     report["torso_length_px"] = torso
-    report["wrist_peak_velocity_normalized"] = float(vel.max() / max(torso, 1.0))
+    report["wrist_peak_velocity_normalized"] = clip_metric(float(vel.max() / max(torso, 1.0)), 0.0, 12.0)
     report["pose_confidence_mean"] = float(np.mean(keypoints_seq[:, :, 2]))
+    report["head_displacement_total"] = clip_metric(report["head_displacement_total"], 0.0, 200.0)
+    report["measurement_reliability"] = "low" if report["pose_confidence_mean"] < 0.55 else "normal"
     report["frames"] = T
     report["fps"] = fps
     report["phase_labels"] = phase_labels

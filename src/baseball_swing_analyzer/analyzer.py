@@ -17,6 +17,8 @@ from .phases import classify_phases
 from .pose import extract_pose, pose_device, smooth_keypoints
 from .reporter import build_report
 from .swing_segments import SwingSegment, best_swing_segment, detect_swing_segments
+from .swing_events import localize_swing_events
+from .swing_validation import SwingCandidate, VisionSwingValidator, extract_clip_features
 from .visualizer import annotate_frame
 
 
@@ -162,7 +164,7 @@ def _detect_motion_windows(
     pre_context_s: float = 0.35,
     post_context_s: float = 0.4,
     merge_gap_s: float = 0.2,
-) -> list[tuple[int, int]]:
+) -> list[SwingCandidate]:
     """Find repeated swing-like motion bursts on the full-rate motion signal."""
     smooth_scores = _smooth_motion_scores(motion_scores)
     if smooth_scores.size < 5 or float(smooth_scores.max()) <= 0:
@@ -214,7 +216,10 @@ def _detect_motion_windows(
             merged[-1] = (prev_start, max(prev_end, end))
         else:
             merged.append((start, end))
-    return merged
+    return [
+        SwingCandidate(start_frame=start, end_frame=end, source="motion")
+        for start, end in merged
+    ]
 
 
 def _window_sample_indices(
@@ -302,6 +307,30 @@ def _window_confidence(
     return round(min(1.0, float(window_scores.max()) / baseline / 2.0), 3)
 
 
+def _candidate_clip_features(
+    video_path: Path,
+    candidate: SwingCandidate,
+    source_fps: float,
+    tracker: str | None,
+) -> dict[str, float | bool]:
+    validation_fps = min(max(source_fps, 1.0), 18.0)
+    validation_max_frames = 24
+    indices = _window_sample_indices(
+        candidate.start_frame,
+        candidate.end_frame,
+        source_fps,
+        validation_fps,
+        validation_max_frames,
+    )
+    keypoints_seq, _, _ = _extract_window_pose_sequence(
+        video_path,
+        indices,
+        tracker,
+        annotate=False,
+    )
+    return extract_clip_features(keypoints_seq, fps=_effective_fps(indices, source_fps))
+
+
 def _build_window_analysis(
     video_path: Path,
     start_frame: int,
@@ -326,7 +355,12 @@ def _build_window_analysis(
         progress_state,
     )
     analysis_fps = _effective_fps(indices, source_fps)
-    phase_labels = classify_phases(keypoints_seq, fps=analysis_fps)
+    events = localize_swing_events(len(indices))
+    phase_labels = classify_phases(
+        keypoints_seq,
+        fps=analysis_fps,
+        forced_contact_frame=events.contact_frame,
+    )
     report = build_report(phase_labels, keypoints_seq, analysis_fps)
     report["flags"] = generate_qualitative_flags(
         keypoints_seq,
@@ -398,19 +432,31 @@ def analyze_swing(
     target_fps, max_frames = _analysis_budget()
     motion_scores = _compute_motion_scores(video_path, props.total_frames)
     motion_windows = _detect_motion_windows(motion_scores, props.fps)
+    validator = VisionSwingValidator()
+    accepted_windows: list[SwingCandidate] = []
+    for candidate in motion_windows:
+        clip_features = _candidate_clip_features(
+            video_path,
+            candidate,
+            props.fps,
+            tracker,
+        )
+        decision = validator.classify_candidate(candidate, clip_features=clip_features)
+        if decision.accepted:
+            accepted_windows.append(candidate)
 
-    if len(motion_windows) > 1:
+    if accepted_windows:
         window_max_frames = max(24, min(max_frames, round(target_fps * 2.0)))
         sampled_windows = [
-            _window_sample_indices(start, end, props.fps, target_fps, window_max_frames)
-            for start, end in motion_windows
+            _window_sample_indices(candidate.start_frame, candidate.end_frame, props.fps, target_fps, window_max_frames)
+            for candidate in accepted_windows
         ]
         total_sampled_frames = sum(len(indices) for indices in sampled_windows)
         progress_state = {"done": 0, "total": total_sampled_frames}
 
         print(
             f"[Analyzer] Source: {props.total_frames} frames @ {props.fps:.1f} fps "
-            f"-> processing {total_sampled_frames} frames across {len(motion_windows)} motion windows on {pose_device()} "
+            f"-> processing {total_sampled_frames} frames across {len(accepted_windows)} motion windows on {pose_device()} "
             f"(target_fps={target_fps:.1f}, per_window_max={window_max_frames}, mode=windowed_motion)"
         )
 
@@ -418,8 +464,8 @@ def analyze_swing(
         window_analyses = [
             _build_window_analysis(
                 video_path=video_path,
-                start_frame=start,
-                end_frame=end,
+                start_frame=candidate.start_frame,
+                end_frame=candidate.end_frame,
                 motion_scores=motion_scores,
                 source_fps=props.fps,
                 target_fps=target_fps,
@@ -430,7 +476,7 @@ def analyze_swing(
                 progress_callback=progress_callback,
                 progress_state=progress_state,
             )
-            for start, end in motion_windows
+            for candidate in accepted_windows
         ]
         pose_inference_duration_ms = (time.perf_counter() - pose_started) * 1000.0
 
@@ -458,6 +504,7 @@ def analyze_swing(
             "analysis_duration_ms": (time.perf_counter() - analysis_started) * 1000.0,
             "pose_inference_duration_ms": pose_inference_duration_ms,
             "motion_windows": len(motion_windows),
+            "accepted_motion_windows": len(accepted_windows),
         }
         report["_keypoints_seq"] = primary_window["keypoints_seq"]
         report["_viewer_segments"] = [
@@ -530,7 +577,12 @@ def analyze_swing(
         segment_slice = slice(0, keypoints_seq.shape[0])
         keypoints_for_metrics = keypoints_seq
 
-    phase_labels = classify_phases(keypoints_for_metrics, fps=analysis_fps)
+    events = localize_swing_events(len(keypoints_for_metrics))
+    phase_labels = classify_phases(
+        keypoints_for_metrics,
+        fps=analysis_fps,
+        forced_contact_frame=events.contact_frame,
+    )
     report = build_report(phase_labels, keypoints_for_metrics, analysis_fps)
     report["flags"] = generate_qualitative_flags(
         keypoints_for_metrics,
@@ -556,7 +608,12 @@ def analyze_swing(
         for index, segment in enumerate(swing_segments, start=1):
             per_swing_slice = slice(segment.start_frame, segment.end_frame + 1)
             per_swing_keypoints = keypoints_seq[per_swing_slice]
-            per_swing_labels = classify_phases(per_swing_keypoints, fps=analysis_fps)
+            per_swing_events = localize_swing_events(len(per_swing_keypoints))
+            per_swing_labels = classify_phases(
+                per_swing_keypoints,
+                fps=analysis_fps,
+                forced_contact_frame=per_swing_events.contact_frame,
+            )
             per_swing_report = build_report(per_swing_labels, per_swing_keypoints, analysis_fps)
             per_swing_report["flags"] = generate_qualitative_flags(
                 per_swing_keypoints,

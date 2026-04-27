@@ -204,3 +204,7 @@ def phase_durations(phase_labels: list[str]) -> dict[str, int]:
         out[phase_labels[i]] = max(out.get(phase_labels[i], 0), run)
         i = j
     return out
+
+
+def clip_metric(value: float, lower: float, upper: float) -> float:
+    return float(max(lower, min(upper, value)))

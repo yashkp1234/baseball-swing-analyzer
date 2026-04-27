@@ -38,6 +38,7 @@ export interface SwingMetrics {
   wrist_peak_velocity_px_s: number;
   wrist_peak_velocity_normalized: number;
   pose_confidence_mean: number;
+  measurement_reliability?: "normal" | "low";
   frames: number;
   fps: number;
   phase_labels: string[];
@@ -147,6 +148,8 @@ export interface JobResults {
   sport_profile: SportProfile | null;
   coaching: CoachingLine[] | null;
   frames_3d_url: string;
+  analysis_version?: string | null;
+  is_current_analysis?: boolean;
 }
 
 function viewerArtifactFilename(swing?: number | null): string {

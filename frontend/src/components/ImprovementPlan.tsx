@@ -1,4 +1,4 @@
-import { ArrowRight, CheckCircle2, CircleAlert, Info } from "lucide-react";
+import { CheckCircle2, CircleAlert, Info } from "lucide-react";
 import { Card, CardTitle } from "@/components/Card";
 import { FlagBadge } from "@/components/FlagsPanel";
 import type { CoachingLine, SwingMetrics } from "@/lib/api";
@@ -63,10 +63,7 @@ export function ImprovementPlan({ nextSteps, flags }: ImprovementPlanProps) {
                 </span>
               </div>
               <p className="mt-3 text-sm leading-6 text-[var(--color-text)]">{step.text}</p>
-              <div className="mt-4 flex items-center gap-2 text-xs text-[var(--color-text-dim)]">
-                <ArrowRight className="h-3.5 w-3.5" />
-                One clear cue at a time.
-              </div>
+              {step.why ? <p className="mt-4 text-xs leading-5 text-[var(--color-text-dim)]">{step.why}</p> : null}
             </div>
           );
         })}

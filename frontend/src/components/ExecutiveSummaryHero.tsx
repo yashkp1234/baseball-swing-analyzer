@@ -13,6 +13,7 @@ function scoreAccent(score: number): string {
 
 export function ExecutiveSummaryHero({ summary, embedded = false }: ExecutiveSummaryHeroProps) {
   const primaryStep = summary.nextSteps[0]?.text;
+  const primaryWhy = summary.nextSteps[0]?.why;
   const terms = summary.terms ?? [];
 
   return (
@@ -42,6 +43,7 @@ export function ExecutiveSummaryHero({ summary, embedded = false }: ExecutiveSum
                 Work on this first
               </p>
               <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">{primaryStep}</p>
+              {primaryWhy ? <p className="mt-2 text-sm leading-6 text-[var(--color-text-dim)]">{primaryWhy}</p> : null}
             </div>
           ) : null}
 

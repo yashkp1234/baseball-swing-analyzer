@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from server import db
+from baseball_swing_analyzer.analysis_version import ANALYSIS_VERSION
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ def run_analysis(job_id: str) -> None:
         from baseball_swing_analyzer.sport import detect_sport_profile
 
         result["sport_profile"] = detect_sport_profile(job["original_filename"], result)
+        result["analysis_version"] = ANALYSIS_VERSION
 
         from baseball_swing_analyzer.ai.knowledge import generate_static_report
 
@@ -127,6 +129,8 @@ def run_analysis(job_id: str) -> None:
             progress_detail_total=None,
             progress_detail_label=None,
             metrics_json=json.dumps(result, default=str),
+            analysis_version=ANALYSIS_VERSION,
+            analysis_family="swing_detection",
             completed_at=datetime.now(timezone.utc).isoformat(),
         )
 

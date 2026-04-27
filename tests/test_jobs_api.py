@@ -152,6 +152,26 @@ async def test_results_endpoint_returns_analysis_summary() -> None:
 
 
 @pytest.mark.asyncio
+async def test_results_endpoint_returns_analysis_freshness_metadata() -> None:
+    metrics = {
+        "contact_frame": 12,
+        "analysis": {"pose_device": "cuda"},
+        "_coaching_lines": ["Good move"],
+    }
+
+    with patch("server.api.results.db.get_job", return_value={
+        "id": "job-123",
+        "status": "completed",
+        "metrics_json": __import__("json").dumps(metrics),
+        "analysis_version": "2026-04-swing-redesign-v1",
+    }):
+        body = await get_results("job-123")
+
+    assert body["analysis_version"] == "2026-04-swing-redesign-v1"
+    assert body["is_current_analysis"] is True
+
+
+@pytest.mark.asyncio
 async def test_artifact_response_honors_byte_range_requests(tmp_path: Path) -> None:
     artifact_path = tmp_path / "annotated.mp4"
     artifact_path.write_bytes(b"0123456789")

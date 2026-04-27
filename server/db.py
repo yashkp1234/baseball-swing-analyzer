@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     progress_detail_current INTEGER,
     progress_detail_total INTEGER,
     progress_detail_label TEXT,
+    analysis_version TEXT,
+    analysis_family TEXT,
     metrics_json TEXT,
     error_message TEXT,
     created_at TEXT NOT NULL,
@@ -34,6 +36,8 @@ _MIGRATIONS: dict[str, str] = {
     "progress_detail_current": "ALTER TABLE jobs ADD COLUMN progress_detail_current INTEGER",
     "progress_detail_total": "ALTER TABLE jobs ADD COLUMN progress_detail_total INTEGER",
     "progress_detail_label": "ALTER TABLE jobs ADD COLUMN progress_detail_label TEXT",
+    "analysis_version": "ALTER TABLE jobs ADD COLUMN analysis_version TEXT",
+    "analysis_family": "ALTER TABLE jobs ADD COLUMN analysis_family TEXT",
 }
 
 _executor = ThreadPoolExecutor(max_workers=2)

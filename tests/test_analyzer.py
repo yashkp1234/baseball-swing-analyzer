@@ -15,6 +15,7 @@ from baseball_swing_analyzer.analyzer import (
     analyze_swing,
 )
 from baseball_swing_analyzer.swing_segments import SwingSegment
+from baseball_swing_analyzer.swing_events import localize_swing_events
 
 
 def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
@@ -162,8 +163,8 @@ def test_detect_motion_windows_merges_close_bursts_into_one_swing() -> None:
     windows = _detect_motion_windows(motion, fps=30.0)
 
     assert len(windows) < 7
-    assert windows[-1][0] < 945
-    assert windows[-1][1] > 995
+    assert windows[-1].start_frame < 945
+    assert windows[-1].end_frame > 995
 
 
 def test_transcode_video_for_browser_uses_h264(tmp_path: Path) -> None:
@@ -181,3 +182,9 @@ def test_transcode_video_for_browser_uses_h264(tmp_path: Path) -> None:
     assert "yuv420p" in cmd
     assert str(src) in cmd
     assert str(dst) in cmd
+
+
+def test_localized_contact_is_not_the_first_quarter_of_clip() -> None:
+    events = localize_swing_events(73)
+    assert events.contact_frame is not None
+    assert events.contact_frame >= int(73 * 0.2)

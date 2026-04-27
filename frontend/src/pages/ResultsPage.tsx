@@ -6,6 +6,7 @@ import { Card, CardTitle } from "@/components/Card";
 import { DetailsDiagnostics } from "@/components/DetailsDiagnostics";
 import { ExecutiveSummaryHero } from "@/components/ExecutiveSummaryHero";
 import { ImprovementPlan } from "@/components/ImprovementPlan";
+import { PhaseConfidenceBanner } from "@/components/PhaseConfidenceBanner";
 import { ProcessingStatus } from "@/components/ProcessingStatus";
 import { SwingTakeaways } from "@/components/SwingTakeaways";
 import { VideoPlayer, type VideoPlayerHandle } from "@/components/VideoPlayer";
@@ -97,6 +98,12 @@ export function ResultsPage() {
       </header>
 
       <main className="mx-auto max-w-[1680px] px-5 py-6 space-y-8 lg:px-8">
+        <PhaseConfidenceBanner
+          isCurrentAnalysis={resultsQuery.data?.is_current_analysis}
+          analysisVersion={resultsQuery.data?.analysis_version}
+          measurementReliability={resolvedMetrics.measurement_reliability ?? null}
+        />
+
         <section
           aria-label="Executive summary and annotated video"
           className="overflow-hidden rounded-[28px] border border-white/10 bg-[linear-gradient(135deg,rgba(13,18,28,0.98),rgba(22,28,38,0.94))] shadow-[0_24px_80px_rgba(0,0,0,0.28)]"

@@ -4,6 +4,8 @@ import json
 
 from fastapi import APIRouter
 
+from baseball_swing_analyzer.analysis_version import ANALYSIS_VERSION
+
 from .. import db
 
 router = APIRouter()
@@ -46,4 +48,6 @@ async def get_results(job_id: str):
         "sport_profile": sport_profile,
         "coaching": _coaching_lines(coaching),
         "frames_3d_url": f"/api/jobs/{job['id']}/artifacts/frames_3d.json",
+        "analysis_version": job.get("analysis_version"),
+        "is_current_analysis": job.get("analysis_version") == ANALYSIS_VERSION,
     }

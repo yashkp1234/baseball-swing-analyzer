@@ -16,6 +16,7 @@ type ScoreZone = "good" | "moderate" | "poor";
 export interface ExecutiveSummaryStep {
   text: string;
   tone: CoachingLine["tone"];
+  why?: string;
 }
 
 export interface SummaryTerm {
@@ -165,13 +166,39 @@ function coachingTopic(text: string): string {
   return normalized;
 }
 
+function coachingWhy(text: string): string | undefined {
+  const topic = coachingTopic(text);
+  if (topic === "separation") {
+    return "This helps the barrel arrive on time instead of leaving the upper body stuck behind the turn.";
+  }
+  if (topic === "stride") {
+    return "A calmer landing gives the lower half something stable to turn against.";
+  }
+  if (topic === "head") {
+    return "A steadier head usually makes the ball easier to track and timing easier to repeat.";
+  }
+  if (topic === "front-shoulder") {
+    return "Keeping the front side closed a beat longer preserves stretch for the swing forward.";
+  }
+  if (topic === "finish") {
+    return "Longer extension keeps the barrel in the hit zone instead of stopping at contact.";
+  }
+  if (topic === "hips") {
+    return "Better sequencing keeps power from leaking before the hands and barrel can use it.";
+  }
+  return undefined;
+}
+
 function pickNextSteps(
   coaching: CoachingLine[] | null | undefined,
   issues: string[],
 ): ExecutiveSummaryStep[] {
   const seenTopics = new Set<string>();
   const coachingLines = (coaching ?? [])
-    .map((line) => ({ text: rewriteCoachingLine(line.text), tone: line.tone }))
+    .map((line) => {
+      const text = rewriteCoachingLine(line.text);
+      return { text, tone: line.tone, why: coachingWhy(text) };
+    })
     .filter((line) => line.text);
   if (coachingLines.length > 0) {
     return coachingLines.filter((line) => {
@@ -183,10 +210,14 @@ function pickNextSteps(
   }
 
   return issues
-    .map((issue) => ({
-      text: issue.replace(/^The /, "").replace(/\.$/, ""),
-      tone: "warn" as const,
-    }))
+    .map((issue) => {
+      const text = issue.replace(/^The /, "").replace(/\.$/, "");
+      return {
+        text,
+        tone: "warn" as const,
+        why: coachingWhy(text),
+      };
+    })
     .slice(0, 3);
 }
 

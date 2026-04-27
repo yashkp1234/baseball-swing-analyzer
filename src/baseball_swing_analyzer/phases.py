@@ -18,6 +18,7 @@ PHASE_LABELS = [
 def classify_phases(
     keypoints_seq: NDArray[np.floating],
     fps: float = 30.0,
+    forced_contact_frame: int | None = None,
 ) -> list[str]:
     """Assign a phase label to every frame using heuristic rules.
 
@@ -37,7 +38,8 @@ def classify_phases(
 
     vel = wrist_velocity(seq, fps)           # (T, 2)
     max_vel = vel.max(axis=1)
-    contact = int(np.argmax(max_vel))
+    contact = forced_contact_frame if forced_contact_frame is not None else int(np.argmax(max_vel))
+    contact = max(0, min(int(contact), T - 1))
     peak_vel = float(max_vel.max())
 
     if peak_vel == 0:

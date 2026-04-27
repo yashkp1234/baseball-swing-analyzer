@@ -15,6 +15,7 @@ from baseball_swing_analyzer.metrics import (
     wrist_velocity,
     stride_foot_plant_frame,
     phase_durations,
+    clip_metric,
 )
 
 
@@ -214,6 +215,12 @@ class TestPhaseDurations:
         labels = ["stance", "load", "stance", "stance"]
         expected = {"stance": 2, "load": 1}
         assert phase_durations(labels) == expected
+
+
+class TestClipMetric:
+    def test_clamps_high_values(self) -> None:
+        assert clip_metric(343.0, 0.0, 200.0) == pytest.approx(200.0)
+        assert clip_metric(72.0, 0.0, 12.0) == pytest.approx(12.0)
 
 
 # ---------------------------------------------------------------------------
