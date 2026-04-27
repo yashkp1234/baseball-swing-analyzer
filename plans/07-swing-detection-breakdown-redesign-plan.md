@@ -4,7 +4,7 @@
 
 **Goal:** Redesign swing detection and the results/breakdown experience so the system stops promoting generic motion as swings, remains usable on hard clips like net-obscured cage video, invalidates stale analysis results, and explains motion in player-friendly terms.
 
-**Architecture:** Replace the current "motion burst -> assume swing -> derive contact from wrist peak" path with a two-stage pipeline: cheap candidate proposal followed by explicit swing validation and event localization. Add analysis versioning so stored results cannot masquerade as current output, then rebuild the breakdown UI around animated motion replay and concise coaching instead of abstract diagrams and repeated filler text.
+**Architecture:** Replace the current "motion burst -> assume swing -> derive contact from wrist peak" path with a two-stage pipeline: cheap candidate proposal followed by explicit swing validation and event localization. Add analysis versioning so stored results cannot masquerade as current output, then rebuild the breakdown UI around animated motion replay and concise coaching instead of abstract diagrams and repeated filler text. Pair that with a coaching-intelligence upgrade from [docs/SWING_RESEARCH_AND_COACHING_PLAN.md](C:/Users/yashk/baseball_swing_analyzer/docs/SWING_RESEARCH_AND_COACHING_PLAN.md): more biomechanically valid metrics, confidence-aware prompts, sport/view-aware interpretation, and drill-level feedback instead of generic bullet points.
 
 **Tech Stack:** Python 3.10+, FastAPI, sqlite3, pytest, OpenCV, NumPy, existing pose stack, optional pluggable vision validator, React, TypeScript, Vite, React Query.
 
@@ -43,6 +43,14 @@
   - Frame scrubber defaults to slow playback.
   - Coaching terms are defined where needed and do not repeat the same idea in multiple panels.
 
+### Benchmark E: Coaching Specificity And Validity
+- Any completed swing result with AI or fallback coaching.
+- Expected behavior:
+  - Coaching explains the biggest leak with a metric value, target range, why it matters, and one concrete drill.
+  - X-factor is interpreted as **peak separation** plus **closure into contact**, not just a static contact value.
+  - Low-confidence or invalid-view clips explicitly hedge angle-based feedback.
+  - Baseball and softball feedback can diverge where attack-angle, pitch-plane, or slap-hitting assumptions differ.
+
 ---
 
 ## Research Summary Driving The Redesign
@@ -64,6 +72,9 @@
      - [Ultralytics Detect Docs](https://github.com/ultralytics/ultralytics/blob/main/docs/en/tasks/detect.md)
      - [Ultralytics COCO Dataset Classes](https://github.com/ultralytics/ultralytics/blob/main/ultralytics/cfg/datasets/coco.yaml)
 
+6. Modern hitting feedback should prioritize the kinematic sequence, peak separation timing, and attack-angle/path quality over a single static contact snapshot.
+   - Companion research: [docs/SWING_RESEARCH_AND_COACHING_PLAN.md](C:/Users/yashk/baseball_swing_analyzer/docs/SWING_RESEARCH_AND_COACHING_PLAN.md)
+
 ---
 
 ## Success Criteria
@@ -75,6 +86,8 @@
 - Results UI removes repeated filler text.
 - Breakdown UI shows an animated skeleton/bat replay panel.
 - Frame scrubber defaults to `0.25x`.
+- Coaching output names one biggest leak first, cites the metric value versus target, and gives one named drill or cue with a short why.
+- Low-confidence or wrong-view clips suppress or hedge invalid angle-based coaching.
 - Python and frontend tests cover the new validator path, stale-result handling, and UI regressions.
 
 ---
@@ -91,12 +104,19 @@
 - Modify: `src/baseball_swing_analyzer/phases.py`
 - Modify: `src/baseball_swing_analyzer/reporter.py`
 - Modify: `src/baseball_swing_analyzer/export_3d.py`
+- Modify: `src/baseball_swing_analyzer/energy.py`
 
 ### Backend API / Persistence
 - Modify: `server/db.py`
 - Modify: `server/tasks/analyze.py`
 - Modify: `server/api/results.py`
 - Modify: `server/api/upload.py`
+
+### Backend Coaching / Knowledge
+- Modify: `src/baseball_swing_analyzer/ai/coaching.py`
+- Modify: `src/baseball_swing_analyzer/ai/knowledge.py`
+- Modify: `src/baseball_swing_analyzer/ai/client.py`
+- Modify: `src/baseball_swing_analyzer/reporter.py`
 
 ### Frontend Results / Viewer
 - Create: `frontend/src/components/AnimatedSwingReplay.tsx`
@@ -117,6 +137,7 @@
 - Create: `tests/test_analysis_version.py`
 - Modify: `tests/test_analyzer.py`
 - Modify: `tests/test_jobs_api.py`
+- Modify: `tests/test_ai.py`
 - Create: `frontend/src/components/ImprovementPlan.test.tsx`
 - Create: `frontend/src/pages/SwingViewerPage.test.tsx`
 
@@ -157,6 +178,21 @@
 - Run full backend/frontend tests.
 - Re-run all benchmark clips.
 - Verify the browser flow on fresh uploads.
+
+### Milestone 7: Upgrade Coaching Intelligence
+- Rewrite the coaching prompt so the model sees ranges, handedness, view confidence, pose quality, sequence data, and drill expectations.
+- Replace generic threshold blurbs with structured cues that include `cue`, `why`, `drill`, and `level`.
+- Make the report choose one main leak first instead of repeating the same concept across multiple cards.
+
+### Milestone 8: Add Missing High-Value Metrics
+- Add `peak_separation_deg`, `peak_separation_frame`, and `separation_closure_rate`.
+- Add `time_to_contact_s`, split head movement into vertical drop and lateral drift, and surface kinematic-chain lag metrics.
+- Add view-aware or confidence-aware gates for angle-based metrics and future attack-angle / stride metrics.
+
+### Milestone 9: Make Coaching View- And Sport-Aware
+- Detect frontal/back vs. side/3-quarter views well enough to gate unreliable angle feedback.
+- Branch thresholds and cues for baseball vs. softball where attack-angle or swing-style assumptions differ.
+- Support uncertainty explicitly rather than fabricating precision.
 
 ---
 
@@ -1060,6 +1096,126 @@ git commit -m "test: lock swing redesign against benchmark clips"
 
 ---
 
+## Task 11: Rewrite The Coaching Prompt Around Evidence And Drills
+
+**Files:**
+- Modify: `src/baseball_swing_analyzer/ai/coaching.py`
+- Modify: `src/baseball_swing_analyzer/reporter.py`
+- Modify: `tests/test_ai.py`
+
+- [ ] **Step 1: Replace the generic prompt template**
+
+Change `src/baseball_swing_analyzer/ai/coaching.py` so the prompt includes:
+- sport
+- handedness / front side
+- view type and confidence
+- pose quality
+- reference ranges next to each important metric
+- one-biggest-leak-first output contract
+- explicit requirement for `why` + drill + success signal
+
+- [ ] **Step 2: Surface the data the prompt needs**
+
+Extend the report payload so the coaching layer gets:
+- `kinetic_chain`
+- `energy_loss_events`
+- `peak_separation_deg`
+- `peak_separation_frame`
+- `separation_closure_rate`
+- `time_to_contact_s`
+- `head_drop_pct`
+- `head_drift_pct`
+- `view_type`
+- `view_confidence`
+
+- [ ] **Step 3: Add prompt regression coverage**
+
+Add tests in `tests/test_ai.py` that assert the prompt now contains:
+- target ranges
+- confidence disclaimers
+- the “biggest leak” instruction
+- drill-oriented output requirements
+
+- [ ] **Step 4: Run tests**
+
+Run: `python -m pytest tests/test_ai.py -v`
+
+Expected: `PASS`
+
+---
+
+## Task 12: Replace Generic Knowledge Rules With Structured Coaching Cues
+
+**Files:**
+- Modify: `src/baseball_swing_analyzer/ai/knowledge.py`
+- Modify: `tests/test_ai.py`
+
+- [ ] **Step 1: Replace one-line threshold blurbs**
+
+Refactor the fallback knowledge base to return structured cues with fields like:
+- `issue`
+- `cue`
+- `why`
+- `drill`
+- `level`
+
+- [ ] **Step 2: Correct the worst threshold problems**
+
+At minimum:
+- stop treating `x_factor_at_contact` as the main separation metric
+- add a distinct `peak_separation_deg` rule
+- normalize head-movement heuristics to body scale where possible
+- add confidence gating when pose/view quality is poor
+
+- [ ] **Step 3: Add tests**
+
+Cover:
+- low-confidence fallback behavior
+- structured cue shape
+- no generic “need more separation” output without a drill or why
+
+- [ ] **Step 4: Run tests**
+
+Run: `python -m pytest tests/test_ai.py -v`
+
+Expected: `PASS`
+
+---
+
+## Task 13: Add View-Aware And Sport-Aware Coaching Gates
+
+**Files:**
+- Modify: `src/baseball_swing_analyzer/reporter.py`
+- Modify: `src/baseball_swing_analyzer/ai/coaching.py`
+- Modify: `src/baseball_swing_analyzer/ai/knowledge.py`
+- Modify: `tests/test_ai.py`
+
+- [ ] **Step 1: Add a lightweight view classifier**
+
+Estimate `view_type` (`frontal`, `back`, `side`, `three_quarter`, `unknown`) and `view_confidence` from the pose geometry already available. It can start heuristic; it does not need to be fancy.
+
+- [ ] **Step 2: Gate invalid coaching**
+
+If pose confidence or view confidence is too low:
+- suppress angle-heavy claims
+- tell the model what is unsafe to infer
+- keep only robust cues
+
+- [ ] **Step 3: Thread sport-specific thresholds**
+
+Let baseball and softball coaching diverge where the research doc says they should, especially:
+- attack-angle target ranges
+- rise-ball / flatter-plane caveats
+- future slap-hitter detection support
+
+- [ ] **Step 4: Run tests**
+
+Run: `python -m pytest tests/test_ai.py tests/test_jobs_api.py -v`
+
+Expected: `PASS`
+
+---
+
 ## Risks And Decisions
 
 1. **Validator provider choice**
@@ -1075,6 +1231,10 @@ git commit -m "test: lock swing redesign against benchmark clips"
    - If phases are unreliable, the UI must say so.
    - Do not render polished but misleading action narratives from low-confidence motion.
 
+4. **Coaching honesty**
+   - If the camera view is wrong for a metric, the system must say so.
+   - Do not let the LLM invent precision from contact-only metrics or low-confidence pose.
+
 ---
 
 ## Final Merge Checklist
@@ -1087,6 +1247,9 @@ git commit -m "test: lock swing redesign against benchmark clips"
 - [ ] "One clear cue at a time." is gone from the player UI.
 - [ ] Breakdown view leads with animated replay.
 - [ ] Frame scrubber defaults to `0.25x`.
+- [ ] Coaching prompt includes ranges, confidence, sequence data, and drill-level specificity.
+- [ ] Fallback knowledge base returns structured cues rather than generic one-liners.
+- [ ] View-aware / sport-aware gates protect invalid angle-based coaching.
 - [ ] `python -m pytest` passes.
 - [ ] `cd frontend && npm test -- --run` passes.
 - [ ] `cd frontend && npm run build` passes.

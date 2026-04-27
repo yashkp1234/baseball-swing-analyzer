@@ -135,7 +135,16 @@ async def test_results_endpoint_returns_analysis_summary() -> None:
             "effective_analysis_fps": 23.4,
             "analysis_duration_ms": 5100.0,
         },
-        "_coaching_lines": ["Good move"],
+        "_coaching_lines": [
+            {
+                "issue": "Low peak separation",
+                "cue": "Let the hips start the turn before the shoulders chase them.",
+                "why": "The torso is not storing enough stretch to turn into bat speed.",
+                "drill": "Hook 'Em drill",
+                "level": "youth",
+                "tone": "warn",
+            }
+        ],
     }
 
     with patch("server.api.results.db.get_job", return_value={
@@ -149,6 +158,8 @@ async def test_results_endpoint_returns_analysis_summary() -> None:
     assert body["analysis"]["sampled_frames"] == 72
     assert body["sport_profile"]["label"] == "softball"
     assert "analysis" not in body["metrics"]
+    assert body["coaching"][0]["why"] == "The torso is not storing enough stretch to turn into bat speed."
+    assert body["coaching"][0]["drill"] == "Hook 'Em drill"
 
 
 @pytest.mark.asyncio
@@ -156,7 +167,16 @@ async def test_results_endpoint_returns_analysis_freshness_metadata() -> None:
     metrics = {
         "contact_frame": 12,
         "analysis": {"pose_device": "cuda"},
-        "_coaching_lines": ["Good move"],
+        "_coaching_lines": [
+            {
+                "issue": "Low peak separation",
+                "cue": "Let the hips start the turn before the shoulders chase them.",
+                "why": "The torso is not storing enough stretch to turn into bat speed.",
+                "drill": "Hook 'Em drill",
+                "level": "youth",
+                "tone": "warn",
+            }
+        ],
     }
 
     with patch("server.api.results.db.get_job", return_value={

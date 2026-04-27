@@ -9,7 +9,10 @@ from baseball_swing_analyzer.ai.client import AiClient
 
 def test_static_report_good_swing():
     metrics = {
-        "x_factor_at_contact": 20.0,
+        "peak_separation_deg": 38.0,
+        "x_factor_at_contact": 5.0,
+        "view_type": "frontal",
+        "view_confidence": 0.9,
         "stride_plant_frame": 25,
         "wrist_peak_velocity_px_s": 2000.0,
         "left_knee_at_contact": 25.0,
@@ -18,19 +21,19 @@ def test_static_report_good_swing():
         "lateral_spine_tilt_at_contact": 5.0,
     }
     cues = generate_static_report(metrics)
-    assert any("solid" in c.lower() for c in cues)
+    assert any("solid" in cue["cue"].lower() for cue in cues)
 
 
 def test_static_report_low_xfactor():
-    metrics = {"x_factor_at_contact": 2.0}
+    metrics = {"x_factor_at_contact": 14.0, "view_type": "frontal", "view_confidence": 0.9}
     cues = generate_static_report(metrics)
-    assert any("x-factor" in c.lower() for c in cues)
+    assert any("x-factor" in cue["cue"].lower() for cue in cues)
 
 
 def test_rules_all_callable_with_zero():
-    # Ensure rules don't crash on edge values
     for name, rule in RULES:
-        assert rule(0.0) is None or isinstance(rule(0.0), str)
+        cue = rule(0.0, {})
+        assert cue is None or hasattr(cue, "cue")
 
 
 def test_ai_client_chat_mock():
@@ -69,6 +72,30 @@ def test_build_coaching_prompt():
     assert "swing analysis" in prompt.lower() or "metrics" in prompt.lower()
 
 
+def test_coaching_prompt_includes_ranges_confidence_and_drill_contract() -> None:
+    from baseball_swing_analyzer.ai.coaching import build_coaching_prompt
+
+    metrics = {
+        "sport": "baseball",
+        "pose_confidence_mean": 0.83,
+        "view_type": "frontal",
+        "view_confidence": 0.74,
+        "peak_separation_deg": 22.0,
+        "x_factor_at_contact": 4.0,
+        "time_to_contact_s": 0.18,
+        "flags": {"handedness": "right"},
+    }
+
+    prompt = build_coaching_prompt(metrics)
+
+    assert "sport:" in prompt.lower()
+    assert "view confidence" in prompt.lower()
+    assert "pose confidence" in prompt.lower()
+    assert "biggest leak" in prompt.lower()
+    assert "drill" in prompt.lower()
+    assert "target range" in prompt.lower() or "good:" in prompt.lower()
+
+
 def test_static_report_uses_generic_copy_when_sport_unknown():
     cues = generate_static_report({
         "sport_profile": {"label": "unknown"},
@@ -76,9 +103,41 @@ def test_static_report_uses_generic_copy_when_sport_unknown():
         "pose_confidence_mean": 0.8,
     })
 
-    assert any("finish stays low" in cue.lower() for cue in cues)
-    assert all("pitcher" not in cue.lower() for cue in cues)
-    assert all("baseball" not in cue.lower() for cue in cues)
+    assert any("finish stays low" in cue["cue"].lower() for cue in cues)
+    assert all("pitcher" not in str(cue).lower() for cue in cues)
+    assert all("baseball" not in str(cue).lower() for cue in cues)
+
+
+def test_static_report_returns_specific_structured_cues() -> None:
+    cues = generate_static_report({
+        "peak_separation_deg": 18.0,
+        "pose_confidence_mean": 0.91,
+        "flags": {"handedness": "right"},
+    })
+
+    first = cues[0]
+    assert isinstance(first, dict)
+    assert "cue" in first
+    assert "why" in first
+    assert "drill" in first
+
+
+def test_static_report_hedges_when_pose_confidence_is_low() -> None:
+    cues = generate_static_report({"pose_confidence_mean": 0.32, "flags": {}})
+    assert "unreliable" in str(cues).lower() or "confidence" in str(cues).lower()
+
+
+def test_static_report_skips_angle_heavy_cues_when_view_is_side() -> None:
+    cues = generate_static_report({
+        "view_type": "side",
+        "view_confidence": 0.86,
+        "pose_confidence_mean": 0.92,
+        "x_factor_at_contact": 18.0,
+        "peak_separation_deg": 18.0,
+        "flags": {},
+    })
+
+    assert all("x-factor" not in cue["cue"].lower() for cue in cues)
 
 
 def test_build_coaching_prompt_is_not_baseball_specific():
@@ -86,6 +145,20 @@ def test_build_coaching_prompt_is_not_baseball_specific():
 
     prompt = build_coaching_prompt({"sport_profile": {"label": "unknown"}})
     assert "baseball swing" not in prompt.lower()
+
+
+def test_prompt_warns_when_angle_metrics_are_not_view_safe() -> None:
+    from baseball_swing_analyzer.ai.coaching import build_coaching_prompt
+
+    prompt = build_coaching_prompt({
+        "sport": "softball",
+        "pose_confidence_mean": 0.88,
+        "view_type": "side",
+        "view_confidence": 0.84,
+        "flags": {"handedness": "left"},
+    })
+
+    assert "reliable only on frontal/back views" in prompt.lower() or "do not invent certainty" in prompt.lower()
 
 
 def test_parse_coaching_text():

@@ -45,7 +45,8 @@ describe("buildExecutiveSummary", () => {
     expect(summary.label).toBe("Game-ready foundation");
     expect(summary.summary).toContain("game-ready foundation");
     expect(summary.strengths.length).toBeGreaterThan(0);
-    expect(summary.nextSteps).toEqual(coaching);
+    expect(summary.nextSteps[0]?.text).toBe(coaching[0].text);
+    expect(summary.nextSteps[1]?.text).toBe(coaching[1].text);
     expect(summary.terms[0]?.term).toContain("Hip-shoulder separation");
   });
 
@@ -93,12 +94,26 @@ describe("buildExecutiveSummary", () => {
     const summary = buildExecutiveSummary(makeMetrics(), [
       {
         tone: "warn",
-        text: "X-factor is very large — ensure you're not over-rotating hips and getting stuck behind the ball.",
+        text: "X-factor is very large - ensure you're not over-rotating hips and getting stuck behind the ball.",
       },
     ]);
 
     expect(summary.nextSteps[0]?.text).toContain("Hip-shoulder separation (X-factor) is on the high side");
     expect(summary.nextSteps[0]?.text).toContain("plain English");
     expect(summary.terms.map((item) => item.term)).toContain("Hip-shoulder separation (X-factor)");
+  });
+
+  test("preserves structured why and drill guidance from backend coaching", () => {
+    const summary = buildExecutiveSummary(makeMetrics(), [
+      {
+        tone: "warn",
+        text: "Let the hips start the turn before the shoulders chase them.",
+        why: "Without early separation, the torso has no stored stretch to turn into bat speed.",
+        drill: "Hook 'Em drill",
+      },
+    ]);
+
+    expect(summary.nextSteps[0]?.why).toContain("stored stretch");
+    expect(summary.nextSteps[0]?.drill).toBe("Hook 'Em drill");
   });
 });

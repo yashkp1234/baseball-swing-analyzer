@@ -82,7 +82,12 @@ def _write_coaching_report(result: dict, args: argparse.Namespace, *, video_path
     report_path = output_dir / "coaching.md"
     report_lines = ["## Coaching Report", "", "### Biomechanical Cues", ""]
     for cue in static_cues:
-        report_lines.append(f"- {cue}")
+        if isinstance(cue, dict):
+            report_lines.append(f"- {cue['cue']}")
+            report_lines.append(f"  Why: {cue['why']}")
+            report_lines.append(f"  Drill: {cue['drill']}")
+        else:
+            report_lines.append(f"- {cue}")
 
     if args.coach:
         try:
@@ -136,7 +141,7 @@ def _write_coaching_report(result: dict, args: argparse.Namespace, *, video_path
 
     report_path.write_text("\n".join(report_lines), encoding="utf-8")
     print(f"\nCoaching report written to {report_path}")
-    print("\n".join(f"- {c}" for c in static_cues))
+    print("\n".join(f"- {cue['cue']}" if isinstance(cue, dict) else f"- {cue}" for cue in static_cues))
 
 
 if __name__ == "__main__":

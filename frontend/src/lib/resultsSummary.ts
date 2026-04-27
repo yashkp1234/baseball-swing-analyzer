@@ -17,6 +17,7 @@ export interface ExecutiveSummaryStep {
   text: string;
   tone: CoachingLine["tone"];
   why?: string;
+  drill?: string;
 }
 
 export interface SummaryTerm {
@@ -197,7 +198,7 @@ function pickNextSteps(
   const coachingLines = (coaching ?? [])
     .map((line) => {
       const text = rewriteCoachingLine(line.text);
-      return { text, tone: line.tone, why: coachingWhy(text) };
+      return { text, tone: line.tone, why: line.why ?? coachingWhy(text), drill: line.drill };
     })
     .filter((line) => line.text);
   if (coachingLines.length > 0) {
@@ -216,6 +217,7 @@ function pickNextSteps(
         text,
         tone: "warn" as const,
         why: coachingWhy(text),
+        drill: undefined,
       };
     })
     .slice(0, 3);

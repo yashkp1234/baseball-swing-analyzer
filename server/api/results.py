@@ -1,6 +1,7 @@
 """Results endpoint — return completed metrics, coaching, and 3D data."""
 
 import json
+from typing import Any
 
 from fastapi import APIRouter
 
@@ -11,21 +12,35 @@ from .. import db
 router = APIRouter()
 
 
-def _coaching_lines(lines: list[str] | None) -> list[dict[str, str]] | None:
+def _coaching_lines(lines: list[Any] | None) -> list[dict[str, str]] | None:
     if lines is None:
         return None
 
     out: list[dict[str, str]] = []
     for line in lines:
-        lower = line.lower()
-        if any(word in lower for word in ("good", "solid", "strong")):
-            tone = "good"
-        elif any(word in lower for word in ("improvement", "consider", "watch", "focus")):
-            tone = "warn"
-        else:
-            tone = "info"
-        out.append({"tone": tone, "text": line})
+        if isinstance(line, dict):
+            text = str(line.get("cue") or line.get("text") or "")
+            tone = str(line.get("tone") or _infer_tone(text))
+            payload = {"tone": tone, "text": text}
+            for key in ("issue", "why", "drill", "level", "metric"):
+                value = line.get(key)
+                if value is not None:
+                    payload[key] = str(value)
+            out.append(payload)
+            continue
+
+        text = str(line)
+        out.append({"tone": _infer_tone(text), "text": text})
     return out
+
+
+def _infer_tone(line: str) -> str:
+    lower = line.lower()
+    if any(word in lower for word in ("good", "solid", "strong")):
+        return "good"
+    if any(word in lower for word in ("improvement", "consider", "watch", "focus", "low", "early", "late")):
+        return "warn"
+    return "info"
 
 
 @router.get("/{job_id}/results")

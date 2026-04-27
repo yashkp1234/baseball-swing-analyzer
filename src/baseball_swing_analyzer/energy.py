@@ -82,9 +82,17 @@ def _cross_correlation_lag(a: NDArray, b: NDArray, max_lag: int = 10) -> int:
     best_lag = 0
     for lag in range(-max_lag, max_lag + 1):
         if lag >= 0:
-            corr = np.corrcoef(a[lag:], b[:len(a) - lag if lag else len(a)])[0, 1]
+            a_slice = a[lag:]
+            b_slice = b[:len(a) - lag if lag else len(a)]
         else:
-            corr = np.corrcoef(a[:len(a) + lag], b[-lag:])[0, 1]
+            a_slice = a[:len(a) + lag]
+            b_slice = b[-lag:]
+        if len(a_slice) < 2 or len(b_slice) < 2:
+            continue
+        if np.std(a_slice) < 1e-6 or np.std(b_slice) < 1e-6:
+            corr = 0.0
+        else:
+            corr = np.corrcoef(a_slice, b_slice)[0, 1]
         if not np.isnan(corr) and corr > best_corr:
             best_corr = corr
             best_lag = lag

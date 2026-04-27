@@ -64,6 +64,11 @@ export function ImprovementPlan({ nextSteps, flags }: ImprovementPlanProps) {
               </div>
               <p className="mt-3 text-sm leading-6 text-[var(--color-text)]">{step.text}</p>
               {step.why ? <p className="mt-4 text-xs leading-5 text-[var(--color-text-dim)]">{step.why}</p> : null}
+              {step.drill ? (
+                <p className="mt-3 text-xs leading-5 text-[var(--color-text-dim)]">
+                  <span className="font-semibold text-[var(--color-text)]">Drill:</span> {step.drill}
+                </p>
+              ) : null}
             </div>
           );
         })}

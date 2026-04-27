@@ -24,7 +24,15 @@ export function CoachingReport({ lines }: { lines: CoachingLine[] }) {
         {lines.map((line, i) => (
           <li key={i} className="flex items-start gap-2 animate-fade-in-up" style={{ animationDelay: `${i * 60}ms` }}>
             <span className={`mt-1.5 h-2 w-2 rounded-full shrink-0 ${DOT_COLOR[line.tone] ?? DOT_COLOR.info}`} />
-            <span className="text-sm">{line.text}</span>
+            <div className="space-y-1">
+              <p className="text-sm">{line.text}</p>
+              {line.why ? <p className="text-xs text-[var(--color-text-dim)]">{line.why}</p> : null}
+              {line.drill ? (
+                <p className="text-xs text-[var(--color-text-dim)]">
+                  <span className="font-semibold text-[var(--color-text)]">Drill:</span> {line.drill}
+                </p>
+              ) : null}
+            </div>
           </li>
         ))}
       </ul>

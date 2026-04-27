@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from baseball_swing_analyzer.reporter import build_report
 from baseball_swing_analyzer.metrics import (
     angle_between,
     midpoint,
@@ -221,6 +222,63 @@ class TestClipMetric:
     def test_clamps_high_values(self) -> None:
         assert clip_metric(343.0, 0.0, 200.0) == pytest.approx(200.0)
         assert clip_metric(72.0, 0.0, 12.0) == pytest.approx(12.0)
+
+
+class TestReportMetrics:
+    def test_build_report_surfaces_peak_separation_timing_and_head_split(self) -> None:
+        seq = np.zeros((6, 17, 3), dtype=float)
+        seq[:, :, 2] = 0.9
+
+        for frame in range(6):
+            seq[frame, 0, 0] = frame * 2.0
+            seq[frame, 0, 1] = frame * 1.5
+
+        hip_lines = [
+            ((0.0, 0.0), (1.0, 0.0)),
+            ((0.0, 0.0), (1.0, 0.4)),
+            ((0.0, 0.0), (1.0, 0.8)),
+            ((0.0, 0.0), (1.0, 0.2)),
+            ((0.0, 0.0), (1.0, 0.1)),
+            ((0.0, 0.0), (1.0, 0.0)),
+        ]
+        shoulder_lines = [
+            ((0.0, 0.0), (1.0, 0.0)),
+            ((0.0, 0.0), (1.0, 0.1)),
+            ((0.0, 0.0), (1.0, 0.0)),
+            ((0.0, 0.0), (1.0, -0.1)),
+            ((0.0, 0.0), (1.0, -0.1)),
+            ((0.0, 0.0), (1.0, -0.1)),
+        ]
+
+        for idx, (hips, shoulders) in enumerate(zip(hip_lines, shoulder_lines)):
+            seq[idx, 11, :2] = hips[0]
+            seq[idx, 12, :2] = hips[1]
+            seq[idx, 5, :2] = shoulders[0]
+            seq[idx, 6, :2] = shoulders[1]
+
+            seq[idx, 13, :2] = [0.0, 1.0]
+            seq[idx, 14, :2] = [1.0, 1.0]
+            seq[idx, 15, :2] = [0.0, 2.0]
+            seq[idx, 16, :2] = [1.0, 2.0]
+            seq[idx, 9, :2] = [float(idx), 0.0]
+            seq[idx, 10, :2] = [float(idx) + 0.5, 0.0]
+
+        report = build_report(
+            ["stance", "load", "stride", "swing", "contact", "follow_through"],
+            seq,
+            30.0,
+        )
+
+        assert "peak_separation_deg" in report
+        assert report["peak_separation_deg"] > 0
+        assert "peak_separation_frame" in report
+        assert "separation_closure_rate" in report
+        assert report["time_to_contact_s"] == pytest.approx(1 / 30.0)
+        assert report["head_drop_pct"] > 0
+        assert report["head_drift_pct"] > 0
+        assert "kinetic_chain" in report
+        assert report["view_type"] in {"frontal", "three_quarter", "side", "unknown"}
+        assert 0.0 <= report["view_confidence"] <= 1.0
 
 
 # ---------------------------------------------------------------------------

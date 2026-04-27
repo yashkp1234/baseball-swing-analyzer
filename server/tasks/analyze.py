@@ -89,11 +89,24 @@ def run_analysis(job_id: str) -> None:
         from baseball_swing_analyzer.ai.knowledge import generate_static_report
 
         coaching_lines = generate_static_report(result)
-        coaching_html = "".join(f"<p>{line}</p>" for line in coaching_lines)
-        (out_dir / "coaching.md").write_text(
-            "\n".join(f"- {c}" for c in coaching_lines), encoding="utf-8"
-        )
-        result["_coaching_lines"] = coaching_lines
+        coaching_markdown_lines: list[str] = []
+        normalized_coaching_lines: list[dict[str, str] | str] = []
+        for line in coaching_lines:
+            if not isinstance(line, dict):
+                coaching_markdown_lines.append(f"- {line}")
+                normalized_coaching_lines.append(str(line))
+                continue
+
+            coaching_markdown_lines.extend(
+                [
+                    f"- {line['cue']}",
+                    f"  Why: {line['why']}",
+                    f"  Drill: {line['drill']}",
+                ]
+            )
+            normalized_coaching_lines.append(line)
+        (out_dir / "coaching.md").write_text("\n".join(coaching_markdown_lines), encoding="utf-8")
+        result["_coaching_lines"] = normalized_coaching_lines
 
         db.update_job(job_id, progress=0.9, current_step="generating_3d_data")
 

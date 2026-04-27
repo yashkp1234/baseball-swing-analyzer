@@ -3,6 +3,11 @@ const API_BASE = "/api/jobs";
 export interface CoachingLine {
   tone: "good" | "warn" | "info";
   text: string;
+  issue?: string;
+  why?: string;
+  drill?: string;
+  level?: string;
+  metric?: string;
 }
 
 export interface AnalysisSummary {
@@ -35,6 +40,21 @@ export interface SwingMetrics {
   left_knee_at_contact: number;
   right_knee_at_contact: number;
   head_displacement_total: number;
+  peak_separation_deg?: number;
+  peak_separation_frame?: number;
+  separation_closure_rate?: number;
+  time_to_contact_s?: number;
+  head_drop_pct?: number;
+  head_drift_pct?: number;
+  view_type?: "frontal" | "side" | "three_quarter" | "unknown";
+  view_confidence?: number;
+  kinetic_chain?: {
+    hip_to_shoulder_lag_frames: number;
+    hip_to_shoulder_direction: string;
+    shoulder_to_hand_lag_frames: number;
+    shoulder_to_hand_direction: string;
+    sequence_order_correct: boolean;
+  };
   wrist_peak_velocity_px_s: number;
   wrist_peak_velocity_normalized: number;
   pose_confidence_mean: number;

@@ -44,6 +44,9 @@ def test_analyze_swing_on_dummy_video(tmp_path: Path) -> None:
     assert isinstance(result, dict)
     assert "phase_durations" in result
     assert "contact_frame" in result
+    assert "peak_separation_deg" in result
+    assert "time_to_contact_s" in result
+    assert "kinetic_chain" in result
     assert "swing_segments" in result
     assert "primary_swing_segment" in result
     assert (out_dir / "annotated.mp4").exists()
