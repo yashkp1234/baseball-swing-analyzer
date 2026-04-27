@@ -11,6 +11,14 @@ from baseball_swing_analyzer.swing_validation import (
 )
 
 
+def _set_segment_line(seq: np.ndarray, frame: int, left_idx: int, right_idx: int, angle_deg: float, y: float) -> None:
+    radians = np.deg2rad(angle_deg)
+    dx = np.cos(radians)
+    dy = np.sin(radians)
+    seq[frame, left_idx, :2] = [-dx, y - dy]
+    seq[frame, right_idx, :2] = [dx, y + dy]
+
+
 def test_load_benchmarks_reads_expected_cases() -> None:
     clips = load_benchmarks(Path("data/videos/benchmarks/manifest.json"))
     ids = {clip.id for clip in clips}
@@ -56,6 +64,20 @@ def test_extract_clip_features_flags_late_peak_without_follow_through() -> None:
     assert features["has_follow_through"] is False
 
 
+def test_extract_clip_features_normalizes_rotation_wraparound() -> None:
+    seq = np.zeros((3, 17, 3), dtype=np.float32)
+    seq[:, :, 2] = 0.9
+    for frame, (hip_deg, shoulder_deg) in enumerate(((179.0, -179.0), (178.0, -178.0), (177.0, -177.0))):
+        _set_segment_line(seq, frame, 11, 12, hip_deg, 0.8)
+        _set_segment_line(seq, frame, 5, 6, shoulder_deg, 0.2)
+        seq[frame, 9, :2] = [frame * 0.1, 0.3]
+        seq[frame, 10, :2] = [frame * 0.1 + 0.2, 0.35]
+
+    features = extract_clip_features(seq, fps=30.0)
+
+    assert features["rotation_range_deg"] < 10.0
+
+
 def test_vision_validator_accepts_committed_swing_shape_without_bat_detection() -> None:
     validator = VisionSwingValidator()
     decision = validator.classify_candidate(
@@ -73,3 +95,23 @@ def test_vision_validator_accepts_committed_swing_shape_without_bat_detection() 
 
     assert decision.accepted is True
     assert decision.label == "swing"
+
+
+def test_vision_validator_rejects_committed_motion_without_follow_through() -> None:
+    validator = VisionSwingValidator()
+    decision = validator.classify_candidate(
+        SwingCandidate(790, 824, "motion"),
+        clip_features={
+            "bat_visible": False,
+            "has_forward_commit": True,
+            "has_follow_through": False,
+            "hand_path_arc_ratio": 2.43,
+            "net_hand_displacement_ratio": 1.47,
+            "peak_velocity_frame_ratio": 0.70,
+            "post_peak_motion_ratio": 0.08,
+            "rotation_range_deg": 16.0,
+        },
+    )
+
+    assert decision.accepted is False
+    assert decision.label in {"load_only", "other_motion"}

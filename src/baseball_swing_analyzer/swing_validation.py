@@ -5,7 +5,7 @@ from dataclasses import dataclass
 import numpy as np
 from numpy.typing import NDArray
 
-from .metrics import hip_angle, shoulder_angle, torso_length_px, wrist_velocity
+from .metrics import torso_length_px, wrist_velocity, x_factor
 
 
 @dataclass(frozen=True)
@@ -66,10 +66,7 @@ def extract_clip_features(
     else:
         post_peak_ratio = 0.0
 
-    rotations = np.asarray(
-        [abs(hip_angle(frame) - shoulder_angle(frame)) for frame in seq],
-        dtype=float,
-    )
+    rotations = np.asarray([x_factor(frame) for frame in seq], dtype=float)
     finite_rotations = rotations[np.isfinite(rotations)]
     rotation_range = float(finite_rotations.max() - finite_rotations.min()) if finite_rotations.size else 0.0
 
@@ -113,9 +110,11 @@ class VisionSwingValidator(SwingValidator):
             return SwingDecision(False, "load_only", 0.78, "motion peaks late without follow-through")
         if hand_path_arc_ratio < 0.75 or net_hand_displacement_ratio < 0.25:
             return SwingDecision(False, "other_motion", 0.7, "hand path too small for a committed swing")
-        if has_direction_change and (has_follow_through or (peak_ratio <= 0.76 and hand_path_arc_ratio >= 1.6)) and (has_bat or rotation_range_deg >= 12.0):
+        if has_direction_change and has_follow_through and (has_bat or rotation_range_deg >= 12.0):
             confidence = 0.85 if has_bat else 0.72
             return SwingDecision(True, "swing", confidence, "committed move with usable follow-through")
+        if has_direction_change and not has_follow_through:
+            return SwingDecision(False, "load_only", 0.74, "forward move never carries through contact")
         if has_bat and not has_direction_change:
             return SwingDecision(False, "load_only", 0.75, "bat visible but no committed forward move")
         return SwingDecision(False, "other_motion", 0.6, "window lacks enough swing evidence")
