@@ -9,7 +9,7 @@ describe("SwingViewerPage", () => {
     expect(PLAYBACK_SPEEDS).toEqual([0.25, 0.5, 1]);
   });
 
-  test("renders animated replay content instead of abstract-only copy", () => {
+  test("renders interpretive replay content instead of abstract-only copy", () => {
     const html = renderToStaticMarkup(
       <AnimatedSwingReplay
         currentFrame={2}
@@ -58,7 +58,8 @@ describe("SwingViewerPage", () => {
       />,
     );
 
-    expect(html).toContain("Replay");
-    expect(html).toContain("Bat path");
+    expect(html).toContain("Interpretive replay");
+    expect(html).toContain("Estimated contact");
+    expect(html).toContain("Estimated exit path");
   });
 });
