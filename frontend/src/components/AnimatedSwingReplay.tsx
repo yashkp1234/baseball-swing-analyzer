@@ -29,42 +29,49 @@ function hipShoulderSeparation(frame: Frame3D): number | null {
 }
 
 interface Bounds {
-  minX: number;
-  maxX: number;
-  minY: number;
-  maxY: number;
+  minU: number;
+  maxU: number;
+  minV: number;
+  maxV: number;
+}
+
+function cameraPoint(point: number[] | undefined): [number, number] | null {
+  if (!point) return null;
+  const [x, y, z = 0] = point;
+  if (![x, y, z].every(Number.isFinite)) return null;
+  return [x + z * 0.16, y + z * 0.08];
 }
 
 function collectBounds(frames: Frame3D[]): Bounds | null {
-  let minX = Number.POSITIVE_INFINITY;
-  let maxX = Number.NEGATIVE_INFINITY;
-  let minY = Number.POSITIVE_INFINITY;
-  let maxY = Number.NEGATIVE_INFINITY;
+  let minU = Number.POSITIVE_INFINITY;
+  let maxU = Number.NEGATIVE_INFINITY;
+  let minV = Number.POSITIVE_INFINITY;
+  let maxV = Number.NEGATIVE_INFINITY;
 
   for (const frame of frames) {
     for (const keypoint of frame.keypoints) {
-      const [x, y] = keypoint;
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      minX = Math.min(minX, x);
-      maxX = Math.max(maxX, x);
-      minY = Math.min(minY, y);
-      maxY = Math.max(maxY, y);
+      const point = cameraPoint(keypoint);
+      if (!point) continue;
+      minU = Math.min(minU, point[0]);
+      maxU = Math.max(maxU, point[0]);
+      minV = Math.min(minV, point[1]);
+      maxV = Math.max(maxV, point[1]);
     }
     if (frame.bat) {
       for (const point of [frame.bat.handle, frame.bat.barrel]) {
-        const [x, y] = point;
-        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-        minX = Math.min(minX, x);
-        maxX = Math.max(maxX, x);
-        minY = Math.min(minY, y);
-        maxY = Math.max(maxY, y);
+        const camera = cameraPoint(point);
+        if (!camera) continue;
+        minU = Math.min(minU, camera[0]);
+        maxU = Math.max(maxU, camera[0]);
+        minV = Math.min(minV, camera[1]);
+        maxV = Math.max(maxV, camera[1]);
       }
     }
   }
 
-  if (![minX, maxX, minY, maxY].every(Number.isFinite)) return null;
-  if (minX === maxX || minY === maxY) return null;
-  return { minX, maxX, minY, maxY };
+  if (![minU, maxU, minV, maxV].every(Number.isFinite)) return null;
+  if (minU === maxU || minV === maxV) return null;
+  return { minU, maxU, minV, maxV };
 }
 
 function projectPoint(
@@ -74,13 +81,13 @@ function projectPoint(
   height: number,
   padding: number,
 ): [number, number] | null {
-  if (!point) return null;
-  const [x, y] = point;
-  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  const camera = cameraPoint(point);
+  if (!camera) return null;
+  const [u, v] = camera;
   const usableWidth = width - padding * 2;
   const usableHeight = height - padding * 2;
-  const px = padding + ((x - bounds.minX) / (bounds.maxX - bounds.minX || 1)) * usableWidth;
-  const normalizedY = padding + ((y - bounds.minY) / (bounds.maxY - bounds.minY || 1)) * usableHeight;
+  const px = padding + ((u - bounds.minU) / (bounds.maxU - bounds.minU || 1)) * usableWidth;
+  const normalizedY = padding + ((v - bounds.minV) / (bounds.maxV - bounds.minV || 1)) * usableHeight;
   return [px, height - normalizedY];
 }
 
@@ -136,6 +143,10 @@ export function AnimatedSwingReplay({ frames, currentFrame, contactFrame, ball, 
 
   const separation = hipShoulderSeparation(frame);
   const batVisible = trailFrames.some((entry) => (entry.bat?.confidence ?? 0) > 0.25);
+  const barrelPath = frames
+    .slice(0, safeFrameIndex + 1)
+    .map((entry) => projectPoint(entry.bat?.barrel, bounds, width, height, padding))
+    .filter((point): point is [number, number] => Boolean(point));
   const contactBall = ball?.contact_position ?? frames[Math.min(contactFrame, frames.length - 1)]?.bat?.barrel;
   const contactBallPoint = projectPoint(contactBall, bounds, width, height, padding);
   const exitPath = estimateExitPath(frames[Math.min(contactFrame, frames.length - 1)], ball)
@@ -173,6 +184,18 @@ export function AnimatedSwingReplay({ frames, currentFrame, contactFrame, ball, 
               <stop offset="100%" stopColor="#7ed7ff" stopOpacity="0.95" />
             </linearGradient>
           </defs>
+
+          {barrelPath.length > 1 ? (
+            <polyline
+              points={barrelPath.map(([x, y]) => `${x},${y}`).join(" ")}
+              fill="none"
+              stroke="#d9a73b"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.72"
+              strokeWidth="4"
+            />
+          ) : null}
 
           {trailFrames.map((trailFrame, trailIndex) => {
             const opacity = 0.18 + (trailIndex / Math.max(trailFrames.length, 1)) * 0.5;

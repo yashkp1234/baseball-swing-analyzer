@@ -63,6 +63,15 @@ export function ResultsPage() {
       .catch(() => setViewerData(null));
   }, [isDemo, jobId, selectedSwingIndex]);
 
+  useEffect(() => {
+    if (!viewerData || viewerData.total_frames <= 1) return;
+    const intervalMs = Math.max(40, 1000 / viewerData.fps);
+    const timer = window.setInterval(() => {
+      setCurrentFrame((frame) => (frame + 1) % viewerData.total_frames);
+    }, intervalMs);
+    return () => window.clearInterval(timer);
+  }, [viewerData]);
+
   if (!jobId) return null;
 
   if (!isReady) {
@@ -91,7 +100,9 @@ export function ResultsPage() {
   const swingSegments = resolvedMetrics.swing_segments ?? [];
   const hasMultipleSwings = swingSegments.length > 1;
   const selectedSwingNumber = selectedSwingIndex + 1;
-  const videoSrc = artifactUrl(jobId, hasMultipleSwings ? `annotated_swing_${selectedSwingNumber}.mp4` : "annotated.mp4");
+  const videoSrc = isDemo
+    ? "/demo-softball-swing.mp4"
+    : artifactUrl(jobId, hasMultipleSwings ? `annotated_swing_${selectedSwingNumber}.mp4` : "annotated.mp4");
   const executiveSummary = buildExecutiveSummary(resolvedMetrics, resultsData?.coaching);
   const reliabilityNote = useMemo(() => {
     const unreliable = resolvedMetrics.analysis_quality?.unreliable_metrics ?? {};
