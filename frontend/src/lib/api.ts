@@ -59,6 +59,15 @@ export interface SwingMetrics {
   wrist_peak_velocity_normalized: number;
   pose_confidence_mean: number;
   measurement_reliability?: "normal" | "low";
+  analysis_quality?: {
+    status: "reportable" | "unprocessable";
+    can_generate_report: boolean;
+    summary: string;
+    reason_codes: string[];
+    reasons: string[];
+    warnings: string[];
+    unreliable_metrics?: Record<string, string>;
+  };
   frames: number;
   fps: number;
   phase_labels: string[];
@@ -124,6 +133,7 @@ export interface Swing3DData {
   };
   kinetic_chain_scores: { hip_to_shoulder: number; shoulder_to_hand: number; overall: number };
   energy_loss_events: EnergyLossEvent[];
+  depth_disclaimer?: string;
   metrics: Record<string, unknown>;
   skeleton: [number, number][];
   keypoint_names: string[];

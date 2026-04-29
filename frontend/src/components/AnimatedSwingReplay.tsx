@@ -92,9 +92,32 @@ interface Props {
   frames: Frame3D[];
   currentFrame: number;
   contactFrame: number;
+  ball?: {
+    contact_frame: number;
+    contact_position: number[];
+    confidence: number;
+    estimate_basis: "contact_frame_barrel_proxy";
+  };
+  reliabilityNote?: string;
+  hideHeadCallout?: boolean;
 }
 
-export function AnimatedSwingReplay({ frames, currentFrame, contactFrame }: Props) {
+function estimateExitPath(frame: Frame3D | undefined, ball: Props["ball"]): number[][] {
+  const barrel = frame?.bat?.barrel;
+  const handle = frame?.bat?.handle;
+  const contact = ball?.contact_position ?? barrel;
+  if (!barrel || !handle || !contact) return [];
+  const direction = [barrel[0] - handle[0], barrel[1] - handle[1], (barrel[2] ?? 0) - (handle[2] ?? 0)];
+  const magnitude = Math.sqrt(direction[0] ** 2 + direction[1] ** 2 + direction[2] ** 2) || 1;
+  const unit = [direction[0] / magnitude, direction[1] / magnitude, direction[2] / magnitude];
+  return [
+    contact,
+    [contact[0] + unit[0] * 0.45, contact[1] + unit[1] * 0.18 + 0.08, (contact[2] ?? 0) + unit[2] * 0.2],
+    [contact[0] + unit[0] * 0.9, contact[1] + unit[1] * 0.26 + 0.12, (contact[2] ?? 0) + unit[2] * 0.35],
+  ];
+}
+
+export function AnimatedSwingReplay({ frames, currentFrame, contactFrame, ball, reliabilityNote, hideHeadCallout = false }: Props) {
   const width = 620;
   const height = 360;
   const padding = 28;
@@ -113,12 +136,17 @@ export function AnimatedSwingReplay({ frames, currentFrame, contactFrame }: Prop
 
   const separation = hipShoulderSeparation(frame);
   const batVisible = trailFrames.some((entry) => (entry.bat?.confidence ?? 0) > 0.25);
+  const contactBall = ball?.contact_position ?? frames[Math.min(contactFrame, frames.length - 1)]?.bat?.barrel;
+  const contactBallPoint = projectPoint(contactBall, bounds, width, height, padding);
+  const exitPath = estimateExitPath(frames[Math.min(contactFrame, frames.length - 1)], ball)
+    .map((point) => projectPoint(point, bounds, width, height, padding))
+    .filter((point): point is [number, number] => Boolean(point));
 
   return (
     <div className="space-y-4" data-testid="animated-swing-replay">
       <div className="flex flex-wrap items-center gap-2">
         <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text)]">
-          Replay
+          Interpretive replay
         </span>
         <span className="rounded-full border border-[var(--color-border)] bg-[var(--color-surface-2)] px-3 py-1 text-xs font-medium text-[var(--color-text-dim)]">
           {phaseLabel(frame.phase)}
@@ -139,6 +167,10 @@ export function AnimatedSwingReplay({ frames, currentFrame, contactFrame }: Prop
             <linearGradient id="batPathGradient" x1="0%" x2="100%" y1="0%" y2="0%">
               <stop offset="0%" stopColor="#8ec5ff" stopOpacity="0.25" />
               <stop offset="100%" stopColor="#8ec5ff" stopOpacity="0.9" />
+            </linearGradient>
+            <linearGradient id="exitPathGradient" x1="0%" x2="100%" y1="0%" y2="0%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#7ed7ff" stopOpacity="0.95" />
             </linearGradient>
           </defs>
 
@@ -211,6 +243,26 @@ export function AnimatedSwingReplay({ frames, currentFrame, contactFrame }: Prop
               </g>
             );
           })}
+
+          {contactBallPoint ? (
+            <g>
+              <circle cx={contactBallPoint[0]} cy={contactBallPoint[1]} r="5" fill="#ffffff" fillOpacity="0.95" />
+              <circle cx={contactBallPoint[0]} cy={contactBallPoint[1]} r="10" fill="none" stroke="#ffffff" strokeOpacity="0.35" strokeWidth="2" />
+            </g>
+          ) : null}
+
+          {exitPath.length > 1 ? (
+            <polyline
+              points={exitPath.map(([x, y]) => `${x},${y}`).join(" ")}
+              fill="none"
+              stroke="url(#exitPathGradient)"
+              strokeDasharray="8 6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeOpacity="0.92"
+              strokeWidth="3"
+            />
+          ) : null}
         </svg>
       </div>
 
@@ -218,24 +270,30 @@ export function AnimatedSwingReplay({ frames, currentFrame, contactFrame }: Prop
         <div className="rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface-2)]/70 p-3">
           <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-dim)]">What you are seeing</p>
           <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">
-            A frame-by-frame body replay with the recent path ghosted behind it, so the move reads like motion instead of a frozen pose.
+            A depth-assisted swing read that keeps the hitter and the estimated barrel path moving as one continuous action.
           </p>
         </div>
         <div className="rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface-2)]/70 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-dim)]">Bat path</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-dim)]">Estimated contact</p>
           <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">
-            {batVisible ? "The gold bat line shows the current bat estimate, with recent barrel travel left behind it." : "Bat path is not reliable on this frame yet, so the replay leans on body motion first."}
+            {batVisible
+              ? "The gold bat line and white contact point are estimated from pose, so they help you read timing and shape rather than exact bat-tracking truth."
+              : "Bat path is not reliable on this frame yet, so the replay leans on body motion first."}
           </p>
         </div>
         <div className="rounded-[18px] border border-[var(--color-border)] bg-[var(--color-surface-2)]/70 p-3">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-dim)]">Turn snapshot</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[var(--color-text-dim)]">Estimated exit path</p>
           <p className="mt-2 text-sm leading-6 text-[var(--color-text)]">
-            {separation == null
-              ? "Hip and shoulder turn are not readable on this frame."
-              : `Hip-shoulder separation is ${Math.abs(separation)} degrees ${separation >= 0 ? "with the hips leading" : "with the shoulders leading"}.`}
+            {reliabilityNote ?? "The dashed path after contact is an estimated carry direction from the swing shape, not measured ball flight."}
           </p>
         </div>
       </div>
+
+      {!hideHeadCallout && separation != null ? (
+        <p className="text-xs leading-5 text-[var(--color-text-dim)]">
+          Turn snapshot: hip-shoulder separation is {Math.abs(separation)} degrees {separation >= 0 ? "with the hips leading." : "with the shoulders leading."}
+        </p>
+      ) : null}
     </div>
   );
 }

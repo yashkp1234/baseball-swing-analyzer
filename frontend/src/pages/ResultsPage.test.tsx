@@ -75,6 +75,19 @@ describe("ResultsPage", () => {
     mockUseQuery.mockReset();
   });
 
+  test("renders a real demo results page without the processing state", () => {
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/results/demo"]}>
+        <Routes>
+          <Route path="/results/:jobId" element={<ResultsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain("Annotated Video");
+    expect(html).not.toContain("Queueing your clip");
+  });
+
   test("groups the executive summary hero and annotated video into one overview surface", () => {
     mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({ data: results } as never);
 
@@ -108,7 +121,6 @@ describe("ResultsPage", () => {
 
     expect(html).toContain("What&#x27;s working");
     expect(html).toContain("What&#x27;s costing performance");
-    expect(html).toContain("What to improve next");
     expect(html).toContain("Stay closed longer into launch.");
     expect(html).not.toContain("Qualitative Flags");
     expect(html).not.toContain("Coaching Report");
@@ -118,20 +130,37 @@ describe("ResultsPage", () => {
     expect(html).toContain("Supporting metrics");
 
     const storyStart = html.indexOf("What&#x27;s working");
-    const nextActionsStart = html.indexOf("What to improve next");
+    const issueStart = html.indexOf("What&#x27;s costing performance");
     const detailsStart = html.indexOf("Details and diagnostics");
     const timelineStart = html.indexOf("Phase Timeline");
     const metricsStart = html.indexOf("Supporting metrics");
 
     expect(storyStart).toBeGreaterThan(-1);
-    expect(nextActionsStart).toBeGreaterThan(-1);
+    expect(issueStart).toBeGreaterThan(-1);
     expect(detailsStart).toBeGreaterThan(-1);
     expect(timelineStart).toBeGreaterThan(-1);
     expect(metricsStart).toBeGreaterThan(-1);
-    expect(storyStart).toBeLessThan(nextActionsStart);
-    expect(nextActionsStart).toBeLessThan(detailsStart);
+    expect(storyStart).toBeLessThan(issueStart);
+    expect(issueStart).toBeLessThan(detailsStart);
     expect(detailsStart).toBeLessThan(timelineStart);
     expect(timelineStart).toBeLessThan(metricsStart);
+  });
+
+  test("keeps the primary results page focused and removes the bulky practice plan section", () => {
+    mockUseQuery.mockReturnValueOnce({ data: status } as never).mockReturnValueOnce({ data: results } as never);
+
+    const html = renderToStaticMarkup(
+      <MemoryRouter initialEntries={["/results/job-123"]}>
+        <Routes>
+          <Route path="/results/:jobId" element={<ResultsPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(html).toContain("Annotated Video");
+    expect(html).toContain("What&#x27;s working");
+    expect(html).toContain("Details and diagnostics");
+    expect(html).not.toContain("Your Practice Plan");
   });
 
   test("renders an interactive timeline with marker callouts inside diagnostics", () => {
